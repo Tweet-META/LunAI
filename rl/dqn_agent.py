@@ -66,6 +66,13 @@ class DQNAgent:
             q_values = self.online_net(state_tensor)
             return int(torch.argmax(q_values, dim=1).item())
 
+    # Return Q-values for debugging a single state.
+    def action_values(self, state: np.ndarray) -> np.ndarray:
+        with torch.no_grad():
+            state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+            q_values = self.online_net(state_tensor).squeeze(0)
+        return q_values.detach().cpu().numpy()
+
     # Run one DQN gradient update and return the loss.
     def update(self, batch: ReplayBatch) -> float:
         states = torch.as_tensor(batch.states, dtype=torch.float32, device=self.device)

@@ -16,6 +16,13 @@ from rl.observation_utils import flatten_observation, observation_dim
 from rl.touhou_rl_env import TouhouRLEnv
 
 
+# Print Q-values with action names from highest to lowest.
+def print_q_values(env: TouhouRLEnv, q_values: np.ndarray) -> None:
+    order = np.argsort(q_values)[::-1]
+    summary = ", ".join(f"{env.ACTIONS[int(i)]}={q_values[int(i)]:+.3f}" for i in order)
+    print(f"q_values: {summary}")
+
+
 # Evaluate a saved DQN model without exploration.
 def evaluate(args: argparse.Namespace) -> None:
     env = TouhouRLEnv(render_mode="human" if args.render else None, max_steps=args.max_steps, action_repeat=args.action_repeat)
@@ -35,13 +42,17 @@ def evaluate(args: argparse.Namespace) -> None:
         for episode in range(1, args.episodes + 1):
             observation = env.reset(seed=args.seed + episode)
             state = flatten_observation(observation)
+            if args.print_q_values:
+                print_q_values(env, agent.action_values(state))
             done = False
             total_reward = 0.0
             total_collisions = 0
             last_info = {}
+            action_counts = np.zeros(9, dtype=np.int32)
 
             while not done:
-                action = agent.select_action(state, epsilon=0.0)
+                action = agent.select_action(state, epsilon=args.eval_epsilon)
+                action_counts[action] += 1
                 observation, reward, done, info = env.step(action)
                 state = flatten_observation(observation)
                 total_reward += reward
@@ -57,6 +68,11 @@ def evaluate(args: argparse.Namespace) -> None:
                 f"episode={episode}, decision_steps={decisions}, frame_steps={frames}, reward={total_reward:.3f}, "
                 f"hp={last_info.get('hp', 0)}, collisions={total_collisions}"
             )
+            if args.print_actions:
+                action_summary = ", ".join(f"{env.ACTIONS[i]}={count}" for i, count in enumerate(action_counts) if count > 0)
+                player_features = observation["player_features"]
+                print(f"actions: {action_summary}")
+                print(f"final_player_xy=({player_features[0]:.3f}, {player_features[1]:.3f})")
 
         print("-" * 64)
         print(
@@ -76,6 +92,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--eval-epsilon", type=float, default=0.0)
+    parser.add_argument("--print-actions", action="store_true")
+    parser.add_argument("--print-q-values", action="store_true")
     parser.add_argument("--render", action="store_true")
     return parser
 
