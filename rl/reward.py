@@ -4,7 +4,7 @@ import numpy as np
 
 
 NEAR_DANGER_SIGMA = 3.0
-DISTANCE_SAFETY_SCALE = 0.01
+NEAR_DANGER_PENALTY_SCALE = 0.02
 
 
 # Convert an action id into simple x and y movement signs.
@@ -71,14 +71,10 @@ def nearby_bullet_danger(observation: dict[str, np.ndarray]) -> float:
     return float(np.clip(0.8 * occupancy_danger + 0.2 * speed_danger, 0.0, 1.0))
 
 
-# Give a small reward when bullets are not close to the player.
-def distance_safety_reward(observation: dict[str, np.ndarray]) -> float:
-    red_occupancy = observation["red_occupancy"]
-    if float(np.max(red_occupancy)) <= 0.0:
-        return DISTANCE_SAFETY_SCALE * 0.5
-
+# Penalize bullets that are too close to the player.
+def near_danger_penalty(observation: dict[str, np.ndarray]) -> float:
     danger = nearby_bullet_danger(observation)
-    return DISTANCE_SAFETY_SCALE * (1.0 - danger)
+    return NEAR_DANGER_PENALTY_SCALE * danger
 
 
 # Compute a minimal baseline reward for one step.
@@ -89,8 +85,8 @@ def compute_reward(
     collided: bool,
 ) -> float:
     survival_reward = 0.03
-    safety_reward = distance_safety_reward(observation)
-    collision_penalty = 10.0 if collided else 0.0
+    danger_penalty = near_danger_penalty(observation)
+    collision_penalty = 20.0 if collided else 0.0
     action_change_penalty = 0.01 if action != previous_action else 0.0
     reversal_penalty = 0.03 if is_reversal(action, previous_action) else 0.0
-    return survival_reward + safety_reward - collision_penalty - action_change_penalty - reversal_penalty
+    return survival_reward - danger_penalty - collision_penalty - action_change_penalty - reversal_penalty
