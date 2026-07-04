@@ -14,7 +14,7 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from rl.observation_utils import flatten_observation, observation_dim, validate_flat_observation
-from rl.ppo_agent import PPOAgent, PPOConfig
+from rl.ppo_agent import PPOAgent, PPOConfig, load_ppo_config
 from rl.touhou_rl_env import TouhouRLEnv
 
 
@@ -75,6 +75,28 @@ def compute_gae(
 
     returns = advantages + np.asarray(values, dtype=np.float32)
     return advantages, returns.astype(np.float32)
+
+
+# Return a value that moves linearly from start to end.
+def linear_schedule(start: float, end: float, progress: float) -> float:
+    clipped_progress = float(np.clip(progress, 0.0, 1.0))
+    return start + (end - start) * clipped_progress
+
+
+# Apply scheduled PPO hyperparameters before one update.
+def update_scheduled_hyperparams(agent: PPOAgent, args: argparse.Namespace, counters: dict[str, int]) -> None:
+    if args.episodes <= 1:
+        progress = 1.0
+    else:
+        progress = (counters["episode"] - 1) / (args.episodes - 1)
+
+    entropy_coef_final = args.entropy_coef if args.entropy_coef_final < 0.0 else args.entropy_coef_final
+    learning_rate_final = args.learning_rate if args.learning_rate_final < 0.0 else args.learning_rate_final
+    agent.config.entropy_coef = linear_schedule(args.entropy_coef, entropy_coef_final, progress)
+
+    scheduled_lr = linear_schedule(args.learning_rate, learning_rate_final, progress)
+    for group in agent.optimizer.param_groups:
+        group["lr"] = scheduled_lr
 
 
 # Collect one on-policy rollout from the environment.
@@ -164,25 +186,48 @@ def train(args: argparse.Namespace) -> None:
     env = TouhouRLEnv(render_mode="human" if args.render else None, max_steps=args.max_steps, action_repeat=args.action_repeat)
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
-    agent = PPOAgent(
-        PPOConfig(
-            state_dim=state_dim,
-            action_dim=9,
-            hidden_dim_1=args.hidden_dim_1,
-            hidden_dim_2=args.hidden_dim_2,
-            gamma=args.gamma,
-            gae_lambda=args.gae_lambda,
-            learning_rate=args.learning_rate,
-            clip_range=args.clip_range,
-            entropy_coef=args.entropy_coef,
-            value_coef=args.value_coef,
-            max_grad_norm=args.max_grad_norm,
-            update_epochs=args.update_epochs,
-            minibatch_size=args.minibatch_size,
-            target_kl=args.target_kl,
-            device=args.device,
+    if args.load_path:
+        load_path = Path(args.load_path)
+        config = load_ppo_config(str(load_path), device=args.device)
+        if config.state_dim != state_dim:
+            raise ValueError(f"Checkpoint state_dim={config.state_dim}, but environment state_dim={state_dim}.")
+        if config.action_dim != 9:
+            raise ValueError(f"Checkpoint action_dim={config.action_dim}, but environment action_dim=9.")
+        config.gamma = args.gamma
+        config.gae_lambda = args.gae_lambda
+        config.learning_rate = args.learning_rate
+        config.clip_range = args.clip_range
+        config.entropy_coef = args.entropy_coef
+        config.value_coef = args.value_coef
+        config.max_grad_norm = args.max_grad_norm
+        config.update_epochs = args.update_epochs
+        config.minibatch_size = args.minibatch_size
+        config.target_kl = args.target_kl
+        agent = PPOAgent(config)
+        agent.load(str(load_path))
+        for group in agent.optimizer.param_groups:
+            group["lr"] = args.learning_rate
+        print(f"Loaded PPO checkpoint from {load_path}")
+    else:
+        agent = PPOAgent(
+            PPOConfig(
+                state_dim=state_dim,
+                action_dim=9,
+                hidden_dim_1=args.hidden_dim_1,
+                hidden_dim_2=args.hidden_dim_2,
+                gamma=args.gamma,
+                gae_lambda=args.gae_lambda,
+                learning_rate=args.learning_rate,
+                clip_range=args.clip_range,
+                entropy_coef=args.entropy_coef,
+                value_coef=args.value_coef,
+                max_grad_norm=args.max_grad_norm,
+                update_epochs=args.update_epochs,
+                minibatch_size=args.minibatch_size,
+                target_kl=args.target_kl,
+                device=args.device,
+            )
         )
-    )
 
     log_path = Path(args.log_path)
     model_path = Path(args.model_path)
@@ -216,6 +261,7 @@ def train(args: argparse.Namespace) -> None:
                 args.gamma,
                 args.gae_lambda,
             )
+            update_scheduled_hyperparams(agent, args, counters)
             latest_metrics = agent.update(
                 np.asarray(rollout["states"], dtype=np.float32),
                 np.asarray(rollout["actions"], dtype=np.int64),
@@ -246,14 +292,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--learning-rate-final", type=float, default=-1.0)
     parser.add_argument("--clip-range", type=float, default=0.2)
     parser.add_argument("--entropy-coef", type=float, default=0.02)
+    parser.add_argument("--entropy-coef-final", type=float, default=-1.0)
     parser.add_argument("--value-coef", type=float, default=0.5)
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
     parser.add_argument("--target-kl", type=float, default=0.03)
     parser.add_argument("--hidden-dim-1", type=int, default=64)
     parser.add_argument("--hidden-dim-2", type=int, default=32)
     parser.add_argument("--save-interval", type=int, default=5)
+    parser.add_argument("--load-path", type=str, default="")
     parser.add_argument("--model-path", type=str, default="checkpoints/ppo_baseline.pt")
     parser.add_argument("--log-path", type=str, default="training_logs/ppo_log.csv")
     parser.add_argument("--device", type=str, default="auto")

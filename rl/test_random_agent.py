@@ -38,7 +38,7 @@ def validate_observation(observation: dict[str, np.ndarray]) -> None:
         "red_vx": (32, 32),
         "red_vy": (32, 32),
         "red_speed": (32, 32),
-        "player_features": (4,),
+        "player_features": (8,),
     }
     for key, shape in expected_shapes.items():
         value = observation[key]

@@ -181,6 +181,12 @@ class ObservationBuilder:
         occupancy = make_occupancy_map(cfg.playfield_width, cfg.playfield_height, bullets)
         integral = make_integral_image(occupancy)
         red_occ, red_vx, red_vy, red_speed = red_local_maps(bullets, red_window, cfg.red_map, cfg.max_speed)
+        player_x = np.clip(player.x / cfg.playfield_width, 0.0, 1.0)
+        player_y = np.clip(player.y / cfg.playfield_height, 0.0, 1.0)
+        left_margin = player_x
+        right_margin = 1.0 - player_x
+        top_margin = player_y
+        bottom_margin = 1.0 - player_y
 
         observation = {
             "blue_density": density_grid(integral, full_window, cfg.blue_grid),
@@ -193,10 +199,14 @@ class ObservationBuilder:
             "red_speed": red_speed,
             "player_features": np.array(
                 [
-                    player.x / cfg.playfield_width,
-                    player.y / cfg.playfield_height,
+                    player_x,
+                    player_y,
                     player.radius / max(cfg.playfield_width, cfg.playfield_height),
                     player.previous_action / 8.0,
+                    left_margin,
+                    right_margin,
+                    top_margin,
+                    bottom_margin,
                 ],
                 dtype=np.float32,
             ),

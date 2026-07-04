@@ -5,6 +5,10 @@ import numpy as np
 
 NEAR_DANGER_SIGMA = 3.0
 NEAR_DANGER_PENALTY_SCALE = 0.02
+EDGE_MARGIN = 0.10
+SIDE_EDGE_PENALTY_SCALE = 0.02
+VERTICAL_EDGE_PENALTY_SCALE = 0.01
+CORNER_PENALTY_SCALE = 0.02
 
 
 # Convert an action id into simple x and y movement signs.
@@ -77,6 +81,34 @@ def near_danger_penalty(observation: dict[str, np.ndarray]) -> float:
     return NEAR_DANGER_PENALTY_SCALE * danger
 
 
+# Penalize camping near walls and corners.
+def boundary_penalty(observation: dict[str, np.ndarray]) -> float:
+    player_features = observation["player_features"]
+    if player_features.shape[0] >= 8:
+        left_margin = float(player_features[4])
+        right_margin = float(player_features[5])
+        top_margin = float(player_features[6])
+        bottom_margin = float(player_features[7])
+    else:
+        player_x = float(player_features[0])
+        player_y = float(player_features[1])
+        left_margin = player_x
+        right_margin = 1.0 - player_x
+        top_margin = player_y
+        bottom_margin = 1.0 - player_y
+
+    left = max(0.0, EDGE_MARGIN - left_margin) / EDGE_MARGIN
+    right = max(0.0, EDGE_MARGIN - right_margin) / EDGE_MARGIN
+    top = max(0.0, EDGE_MARGIN - top_margin) / EDGE_MARGIN
+    bottom = max(0.0, EDGE_MARGIN - bottom_margin) / EDGE_MARGIN
+    side_pressure = max(left, right)
+    vertical_pressure = max(top, bottom)
+    side_penalty = SIDE_EDGE_PENALTY_SCALE * side_pressure
+    vertical_penalty = VERTICAL_EDGE_PENALTY_SCALE * vertical_pressure
+    corner_penalty = CORNER_PENALTY_SCALE * side_pressure * vertical_pressure
+    return side_penalty + vertical_penalty + corner_penalty
+
+
 # Compute a minimal baseline reward for one step.
 def compute_reward(
     observation: dict[str, np.ndarray],
@@ -86,7 +118,8 @@ def compute_reward(
 ) -> float:
     survival_reward = 0.03
     danger_penalty = near_danger_penalty(observation)
+    wall_penalty = boundary_penalty(observation)
     collision_penalty = 20.0 if collided else 0.0
     action_change_penalty = 0.01 if action != previous_action else 0.0
     reversal_penalty = 0.03 if is_reversal(action, previous_action) else 0.0
-    return survival_reward - danger_penalty - collision_penalty - action_change_penalty - reversal_penalty
+    return survival_reward - danger_penalty - wall_penalty - collision_penalty - action_change_penalty - reversal_penalty
