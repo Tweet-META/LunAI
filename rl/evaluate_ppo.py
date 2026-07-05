@@ -25,7 +25,12 @@ def print_action_probs(env: TouhouRLEnv, probs: np.ndarray) -> None:
 
 # Evaluate a saved PPO model.
 def evaluate(args: argparse.Namespace) -> None:
-    env = TouhouRLEnv(render_mode="human" if args.render else None, max_steps=args.max_steps, action_repeat=args.action_repeat)
+    env = TouhouRLEnv(
+        render_mode="human" if args.render else None,
+        max_steps=args.max_steps,
+        action_repeat=args.action_repeat,
+        level_file=args.level_file,
+    )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
     config = load_ppo_config(str(Path(args.model_path)), device=args.device)
@@ -96,6 +101,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--action-repeat", type=int, default=3)
+    parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--stochastic", action="store_true")

@@ -43,8 +43,8 @@ class TitleScene(Scene):
                 pygame.quit()
 
     def switch_to_game(self):
-        from assets.scripts.scenes.GameScene import GameScene
-        self.switch_to_scene(GameScene())
+        from assets.scripts.scenes.GameScene import GameScene, PLAY_LEVEL_SEQUENCE
+        self.switch_to_scene(GameScene(level_file=PLAY_LEVEL_SEQUENCE[0], level_sequence=PLAY_LEVEL_SEQUENCE, level_index=0))
 
     def switch_to_scoreboard(self):
         from assets.scripts.scenes.ScoreboardScene import ScoreboardScene
@@ -54,4 +54,3 @@ class TitleScene(Scene):
         music_module.sounds[0](.1)
         time.sleep(.3)
         pygame.quit()
-

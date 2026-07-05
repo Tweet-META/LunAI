@@ -31,10 +31,17 @@ class TouhouRLEnv:
     }
 
     # Create the RL wrapper around the existing GameScene.
-    def __init__(self, render_mode: str | None = None, max_steps: int | None = None, action_repeat: int = 3):
+    def __init__(
+        self,
+        render_mode: str | None = None,
+        max_steps: int | None = None,
+        action_repeat: int = 3,
+        level_file: str = "level_1.json",
+    ):
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.action_repeat = max(1, int(action_repeat))
+        self.level_file = level_file
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -97,7 +104,7 @@ class TouhouRLEnv:
 
         from assets.scripts.scenes.GameScene import GameScene
 
-        self.scene = GameScene()
+        self.scene = GameScene(level_file=self.level_file)
         self.steps = 0
         self.frame_steps = 0
         self.previous_action = 0

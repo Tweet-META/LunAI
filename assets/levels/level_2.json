@@ -1,36 +1,36 @@
 {
-  "length": 16.0,
-  "name": "stage_1_aimed_single",
-  "description": "Single aimed bullets for basic streaming practice.",
+  "length": 15.0,
+  "name": "stage_2_light_3way",
+  "description": "Light 3-way aimed bullets without even-bullet gaps.",
   "enemies": [
     {
       "start_position": [
-        180,
+        100,
         0
       ],
       "trajectory": [
         [
-          180,
-          90
-        ],
-        [
-          180,
-          120
+          100,
+          100
         ],
         [
           180,
           140
         ],
         [
-          180,
+          220,
           160
         ],
         [
-          180,
-          180
+          260,
+          120
+        ],
+        [
+          300,
+          -60
         ]
       ],
-      "speed": 0.55,
+      "speed": 0.75,
       "sprite": {
         "size": [
           24,
@@ -50,11 +50,11 @@
           0
         ]
       },
-      "hp": 20,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -73,8 +73,8 @@
           ],
           "player",
           105,
-          0,
-          0.65,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -96,32 +96,32 @@
     },
     {
       "start_position": [
-        420,
+        500,
         0
       ],
       "trajectory": [
         [
-          420,
-          90
-        ],
-        [
-          420,
-          120
+          500,
+          100
         ],
         [
           420,
           140
         ],
         [
-          420,
+          380,
           160
         ],
         [
-          420,
-          180
+          340,
+          120
+        ],
+        [
+          300,
+          -60
         ]
       ],
-      "speed": 0.55,
+      "speed": 0.75,
       "sprite": {
         "size": [
           24,
@@ -141,11 +141,11 @@
           0
         ]
       },
-      "hp": 20,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -164,8 +164,8 @@
           ],
           "player",
           105,
-          0,
-          0.65,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -183,36 +183,36 @@
         ]
       },
       "clear_on_death": false,
-      "time": 2.0
+      "time": 1.8
     },
     {
       "start_position": [
-        300,
+        160,
         0
       ],
       "trajectory": [
         [
-          300,
-          90
+          160,
+          100
         ],
         [
-          300,
+          180,
+          140
+        ],
+        [
+          220,
+          160
+        ],
+        [
+          260,
           120
         ],
         [
           300,
-          140
-        ],
-        [
-          300,
-          160
-        ],
-        [
-          300,
-          180
+          -60
         ]
       ],
-      "speed": 0.55,
+      "speed": 0.75,
       "sprite": {
         "size": [
           24,
@@ -232,11 +232,11 @@
           0
         ]
       },
-      "hp": 20,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -255,8 +255,8 @@
           ],
           "player",
           105,
-          0,
-          0.65,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -274,36 +274,36 @@
         ]
       },
       "clear_on_death": false,
-      "time": 3.5
+      "time": 3.1
     },
     {
       "start_position": [
-        220,
+        440,
         0
       ],
       "trajectory": [
         [
-          220,
-          90
+          440,
+          100
         ],
         [
-          220,
-          120
-        ],
-        [
-          220,
+          420,
           140
         ],
         [
-          220,
+          380,
           160
         ],
         [
-          220,
-          180
+          340,
+          120
+        ],
+        [
+          300,
+          -60
         ]
       ],
-      "speed": 0.55,
+      "speed": 0.75,
       "sprite": {
         "size": [
           24,
@@ -323,11 +323,11 @@
           0
         ]
       },
-      "hp": 20,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -346,8 +346,8 @@
           ],
           "player",
           105,
-          0,
-          0.65,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -365,60 +365,60 @@
         ]
       },
       "clear_on_death": false,
-      "time": 5.0
+      "time": 4.4
     },
     {
       "start_position": [
-        300,
+        100,
         0
       ],
       "trajectory": [
         [
-          300,
-          80
+          100,
+          100
         ],
         [
-          300,
+          180,
+          140
+        ],
+        [
+          220,
+          160
+        ],
+        [
+          260,
           120
         ],
         [
           300,
-          150
-        ],
-        [
-          300,
-          150
-        ],
-        [
-          300,
-          -80
+          -60
         ]
       ],
-      "speed": 0.6,
+      "speed": 0.75,
       "sprite": {
         "size": [
-          32,
-          32
+          24,
+          19
         ],
         "path": [
           "assets",
           "sprites",
           "entities",
-          "spiky_ball.png"
+          "fairy_0.png"
         ]
       },
       "collider": {
-        "radius": 16,
+        "radius": 15,
         "offset": [
           0,
           0
         ]
       },
-      "hp": 30,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -437,8 +437,8 @@
           ],
           "player",
           105,
-          0,
-          0.65,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -456,60 +456,60 @@
         ]
       },
       "clear_on_death": false,
-      "time": 6.8
+      "time": 5.9
     },
     {
       "start_position": [
-        180,
+        500,
         0
       ],
       "trajectory": [
         [
-          180,
-          80
+          500,
+          100
         ],
         [
-          180,
+          420,
+          140
+        ],
+        [
+          380,
+          160
+        ],
+        [
+          340,
           120
         ],
         [
-          180,
-          150
-        ],
-        [
-          180,
-          150
-        ],
-        [
-          180,
-          -80
+          300,
+          -60
         ]
       ],
-      "speed": 0.6,
+      "speed": 0.75,
       "sprite": {
         "size": [
-          32,
-          32
+          24,
+          19
         ],
         "path": [
           "assets",
           "sprites",
           "entities",
-          "spiky_ball.png"
+          "fairy_0.png"
         ]
       },
       "collider": {
-        "radius": 16,
+        "radius": 15,
         "offset": [
           0,
           0
         ]
       },
-      "hp": 30,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -528,8 +528,8 @@
           ],
           "player",
           105,
-          0,
-          0.65,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -547,60 +547,60 @@
         ]
       },
       "clear_on_death": false,
-      "time": 8.6
+      "time": 7.4
     },
     {
       "start_position": [
-        420,
+        160,
         0
       ],
       "trajectory": [
         [
-          420,
-          80
+          160,
+          100
         ],
         [
-          420,
+          180,
+          140
+        ],
+        [
+          220,
+          160
+        ],
+        [
+          260,
           120
         ],
         [
-          420,
-          150
-        ],
-        [
-          420,
-          150
-        ],
-        [
-          420,
-          -80
+          300,
+          -60
         ]
       ],
-      "speed": 0.6,
+      "speed": 0.75,
       "sprite": {
         "size": [
-          32,
-          32
+          24,
+          19
         ],
         "path": [
           "assets",
           "sprites",
           "entities",
-          "spiky_ball.png"
+          "fairy_0.png"
         ]
       },
       "collider": {
-        "radius": 16,
+        "radius": 15,
         "offset": [
           0,
           0
         ]
       },
-      "hp": 30,
+      "hp": 18,
       "attacks": [
         [
           "wide_cone",
-          1,
+          3,
           5,
           [
             [
@@ -619,8 +619,99 @@
           ],
           "player",
           105,
+          5,
+          0.75,
+          0.75,
+          0
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 8.9
+    },
+    {
+      "start_position": [
+        440,
+        0
+      ],
+      "trajectory": [
+        [
+          440,
+          100
+        ],
+        [
+          420,
+          140
+        ],
+        [
+          380,
+          160
+        ],
+        [
+          340,
+          120
+        ],
+        [
+          300,
+          -60
+        ]
+      ],
+      "speed": 0.75,
+      "sprite": {
+        "size": [
+          24,
+          19
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "fairy_0.png"
+        ]
+      },
+      "collider": {
+        "radius": 15,
+        "offset": [
           0,
-          0.65,
+          0
+        ]
+      },
+      "hp": 18,
+      "attacks": [
+        [
+          "wide_cone",
+          3,
+          5,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "kunai_0.png"
+            ],
+            16,
+            16,
+            4,
+            [
+              0,
+              0
+            ]
+          ],
+          "player",
+          105,
+          5,
+          0.75,
           0.75,
           0
         ]
@@ -639,97 +730,6 @@
       },
       "clear_on_death": false,
       "time": 10.4
-    },
-    {
-      "start_position": [
-        300,
-        0
-      ],
-      "trajectory": [
-        [
-          300,
-          80
-        ],
-        [
-          300,
-          120
-        ],
-        [
-          300,
-          150
-        ],
-        [
-          300,
-          150
-        ],
-        [
-          300,
-          -80
-        ]
-      ],
-      "speed": 0.6,
-      "sprite": {
-        "size": [
-          32,
-          32
-        ],
-        "path": [
-          "assets",
-          "sprites",
-          "entities",
-          "spiky_ball.png"
-        ]
-      },
-      "collider": {
-        "radius": 16,
-        "offset": [
-          0,
-          0
-        ]
-      },
-      "hp": 30,
-      "attacks": [
-        [
-          "wide_cone",
-          1,
-          5,
-          [
-            [
-              "assets",
-              "sprites",
-              "projectiles_and_items",
-              "kunai_0.png"
-            ],
-            16,
-            16,
-            4,
-            [
-              0,
-              0
-            ]
-          ],
-          "player",
-          105,
-          0,
-          0.65,
-          0.75,
-          0
-        ]
-      ],
-      "drop": {
-        "list": [
-          "points",
-          "power_small",
-          "nothing"
-        ],
-        "probabilities": [
-          50,
-          20,
-          30
-        ]
-      },
-      "clear_on_death": false,
-      "time": 12.2
     }
   ]
 }

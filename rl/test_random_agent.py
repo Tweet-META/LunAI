@@ -66,8 +66,13 @@ def print_ranges(observation: dict[str, np.ndarray]) -> None:
 
 
 # Run random actions to smoke-test the environment.
-def run_random_agent(episodes: int, max_steps: int, action_repeat: int, render: bool) -> None:
-    env = TouhouRLEnv(render_mode="human" if render else None, max_steps=max_steps, action_repeat=action_repeat)
+def run_random_agent(episodes: int, max_steps: int, action_repeat: int, level_file: str, render: bool) -> None:
+    env = TouhouRLEnv(
+        render_mode="human" if render else None,
+        max_steps=max_steps,
+        action_repeat=action_repeat,
+        level_file=level_file,
+    )
     episode_rewards = []
     episode_frame_steps = []
     episode_decision_steps = []
@@ -102,7 +107,7 @@ def run_random_agent(episodes: int, max_steps: int, action_repeat: int, render: 
 
         print("Random agent summary")
         print("-" * 64)
-        print(f"episodes={episodes}, max_steps={max_steps}, action_repeat={action_repeat}")
+        print(f"episodes={episodes}, max_steps={max_steps}, action_repeat={action_repeat}, level_file={level_file}")
         print(f"mean_decision_steps={np.mean(episode_decision_steps):.2f}")
         print(f"mean_frame_steps={np.mean(episode_frame_steps):.2f}")
         print(f"min_frame_steps={np.min(episode_frame_steps)}")
@@ -119,9 +124,10 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--action-repeat", type=int, default=3)
+    parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--render", action="store_true")
     args = parser.parse_args()
-    run_random_agent(args.episodes, args.max_steps, args.action_repeat, args.render)
+    run_random_agent(args.episodes, args.max_steps, args.action_repeat, args.level_file, args.render)
 
 
 if __name__ == "__main__":

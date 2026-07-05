@@ -17,9 +17,16 @@ from assets.scripts.math_and_data.enviroment import *
 from PIL import Image
 
 
+PLAY_LEVEL_SEQUENCE = ["level_1.json", "level_2.json", "level_3.json", "level_4.json", "level_5.json"]
+
+
 class GameScene(Scene):
-    def __init__(self):
+    # Create the game scene and load one level file.
+    def __init__(self, level_file="level_1.json", level_sequence=None, level_index=0, carried_player_state=None):
         super().__init__()
+        self.level_file = level_file
+        self.level_sequence = level_sequence
+        self.level_index = level_index
         self.GAME_ZONE = tuple(map(int, os.getenv("GAME_ZONE").split(', ')))
         self.delta_time = 0.001
 
@@ -35,6 +42,8 @@ class GameScene(Scene):
         self.font = pygame.font.Font(path_join("assets", "fonts", "DFPPOPCorn-W12.ttf"), 36)
 
         self.player = Player(0, self, 4)
+        if carried_player_state is not None:
+            self.apply_player_state(carried_player_state)
 
         self.enemy_bullets = []
         self.items = []
@@ -49,11 +58,43 @@ class GameScene(Scene):
         self.effect_group = pygame.sprite.RenderPlain()
 
         self.time = 0
-        self.level = json.load(open(path_join("assets", "levels", "level_1.json")))
+        self.level = json.load(open(path_join("assets", "levels", self.level_file), encoding="utf-8"))
         self.level_enemies = sorted(self.level["enemies"], key=lambda enemy: enemy["time"])
         self.enemy_count = 0
 
         self.enemies = []
+
+    # Copy persistent player values into a fresh level scene.
+    def apply_player_state(self, player_state):
+        self.player.hp = player_state.get("hp", self.player.hp)
+        self.player.points = player_state.get("points", self.player.points)
+        self.player.power = player_state.get("power", self.player.power)
+        self.player.slowRate = player_state.get("slowRate", self.player.slowRate)
+
+    # Capture player values that should survive between play levels.
+    def player_state(self):
+        return {
+            "hp": self.player.hp,
+            "points": self.player.points,
+            "power": self.player.power,
+            "slowRate": self.player.slowRate,
+        }
+
+    # Move to the next play level, or finish on the scoreboard.
+    def finish_level(self):
+        if self.level_sequence is not None and self.level_index + 1 < len(self.level_sequence):
+            next_index = self.level_index + 1
+            self.switch_to_scene(
+                GameScene(
+                    level_file=self.level_sequence[next_index],
+                    level_sequence=self.level_sequence,
+                    level_index=next_index,
+                    carried_player_state=self.player_state(),
+                )
+            )
+            return
+
+        self.player.switch_to_scoreboard()
 
     def process_input(self, events):
         for evt in events:
@@ -86,7 +127,8 @@ class GameScene(Scene):
         self.time += delta_time
 
         if self.time >= self.level["length"]:
-            self.player.switch_to_scoreboard()
+            self.finish_level()
+            return
 
         if self.level_enemies and self.enemy_count < len(self.level_enemies):
             if self.time >= self.level_enemies[self.enemy_count]["time"]:

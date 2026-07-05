@@ -3,8 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 
-NEAR_DANGER_SIGMA = 3.0
-NEAR_DANGER_PENALTY_SCALE = 0.02
+NEAR_DANGER_PENALTY_SCALE = 0.03
 EDGE_MARGIN = 0.14
 SIDE_EDGE_PENALTY_SCALE = 0.025
 VERTICAL_EDGE_PENALTY_SCALE = 0.015
@@ -69,8 +68,15 @@ def nearby_bullet_danger(observation: dict[str, np.ndarray]) -> float:
     player_x, player_y = player_red_map_position(observation)
     rows, cols = red_occupancy.shape
     yy, xx = np.mgrid[0:rows, 0:cols]
-    dist_sq = (xx - player_x) ** 2 + (yy - player_y) ** 2
-    weights = np.exp(-dist_sq / (2.0 * NEAR_DANGER_SIGMA ** 2))
+    distances = np.sqrt((xx - player_x) ** 2 + (yy - player_y) ** 2)
+    max_distance = max(
+        float(np.hypot(player_x, player_y)),
+        float(np.hypot(cols - 1.0 - player_x, player_y)),
+        float(np.hypot(player_x, rows - 1.0 - player_y)),
+        float(np.hypot(cols - 1.0 - player_x, rows - 1.0 - player_y)),
+        1.0,
+    )
+    weights = np.clip(1.0 - distances / max_distance, 0.0, 1.0)
     occupancy_danger = float(np.max(red_occupancy * weights))
     speed_danger = float(np.max(red_occupancy * red_speed * weights))
     return float(np.clip(0.8 * occupancy_danger + 0.2 * speed_danger, 0.0, 1.0))
