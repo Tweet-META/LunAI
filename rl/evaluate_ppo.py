@@ -30,6 +30,8 @@ def evaluate(args: argparse.Namespace) -> None:
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
+        random_player_start=args.random_player_start,
+        player_start_margin=args.player_start_margin,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
@@ -102,6 +104,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--level-file", type=str, default="level_1.json")
+    parser.add_argument("--random-player-start", action="store_true")
+    parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--stochastic", action="store_true")
