@@ -21,11 +21,12 @@ except ImportError:
 
 
 WIDTH = 1500
-HEIGHT = 1000
+HEIGHT = 860
 PADDING = 70
-PANEL_GAP = 44
+PANEL_GAP = 110
 MOVING_AVERAGE_WINDOW = 20
 FRAME_THRESHOLDS = (600, 1200, 1500, 1800, 2000)
+SCATTER_BINS = 18
 
 
 # Convert a value to float and keep bad values harmless.
@@ -53,6 +54,7 @@ def read_training_log(path: Path) -> list[dict[str, float]]:
             rows.append(
                 {
                     "episode": safe_int(raw_row.get("episode")),
+                    "global_step": safe_float(raw_row.get("global_step")),
                     "frame_steps": safe_float(raw_row.get("frame_steps")),
                     "decision_steps": safe_float(raw_row.get("decision_steps")),
                     "episode_reward": safe_float(raw_row.get("episode_reward")),
@@ -143,21 +145,38 @@ def scale_points(
     rect: tuple[int, int, int, int],
     y_min: float,
     y_max: float,
+    x_min: float | None = None,
+    x_max: float | None = None,
 ) -> list[tuple[int, int]]:
     left, top, right, bottom = rect
-    x_min = min(xs)
-    x_max = max(xs)
-    if math.isclose(x_min, x_max):
-        x_max = x_min + 1.0
+    data_x_min = min(xs) if x_min is None else x_min
+    data_x_max = max(xs) if x_max is None else x_max
+    if math.isclose(data_x_min, data_x_max):
+        data_x_max = data_x_min + 1.0
     if math.isclose(y_min, y_max):
         y_max = y_min + 1.0
 
     points = []
     for x, y in zip(xs, ys):
-        px = left + int((x - x_min) / (x_max - x_min) * (right - left))
+        px = left + int((x - data_x_min) / (data_x_max - data_x_min) * (right - left))
         py = bottom - int((y - y_min) / (y_max - y_min) * (bottom - top))
         points.append((px, py))
     return points
+
+
+# Return the data range with a little padding.
+def padded_range(values: list[float], fixed_min: float | None = None, fixed_max: float | None = None) -> tuple[float, float]:
+    data_min = min(values) if fixed_min is None else fixed_min
+    data_max = max(values) if fixed_max is None else fixed_max
+    value_range = data_max - data_min
+    padding = max(value_range * 0.08, abs(data_max) * 0.08, abs(data_min) * 0.08, 0.001)
+    if fixed_min is None:
+        data_min -= padding
+    if fixed_max is None:
+        data_max += padding
+    if math.isclose(data_min, data_max):
+        data_max = data_min + 1.0
+    return data_min, data_max
 
 
 # Draw grid lines and axis labels for one chart.
@@ -189,6 +208,29 @@ def draw_axes(
         draw.text((left - 64, y - 9), label, fill=(90, 90, 90), font=small_font)
 
 
+# Draw x-axis labels for one chart.
+def draw_x_labels(
+    draw: ImageDraw.ImageDraw,
+    rect: tuple[int, int, int, int],
+    x_min: float,
+    x_max: float,
+    small_font: ImageFont.ImageFont,
+    tick_count: int = 5,
+) -> None:
+    left, top, right, bottom = rect
+    tick_count = max(2, tick_count)
+    for index in range(tick_count):
+        ratio = index / (tick_count - 1)
+        x = left + int(ratio * (right - left))
+        value = x_min + ratio * (x_max - x_min)
+        draw.line((x, bottom, x, bottom + 5), fill=(90, 90, 90), width=1)
+        if abs(value) >= 10000:
+            label = f"{value / 1000:.0f}k"
+        else:
+            label = f"{value:.0f}"
+        draw.text((x - 24, bottom + 8), label, fill=(90, 90, 90), font=small_font)
+
+
 # Draw one line chart with raw and smoothed values.
 def draw_line_chart(
     draw: ImageDraw.ImageDraw,
@@ -206,17 +248,10 @@ def draw_line_chart(
         return
 
     smooth_values = moving_average(values, MOVING_AVERAGE_WINDOW)
-    all_values = values + smooth_values
-    data_min = min(all_values) if y_min is None else y_min
-    data_max = max(all_values) if y_max is None else y_max
-    value_range = data_max - data_min
-    padding = max(value_range * 0.08, abs(data_max) * 0.08, abs(data_min) * 0.08, 0.001)
-    if y_min is None:
-        data_min -= padding
-    if y_max is None:
-        data_max += padding
+    data_min, data_max = padded_range(values + smooth_values, y_min, y_max)
 
     draw_axes(draw, rect, title, data_min, data_max, font, small_font)
+    draw_x_labels(draw, rect, min(episodes), max(episodes), small_font)
     raw_points = scale_points(episodes, values, rect, data_min, data_max)
     smooth_points = scale_points(episodes, smooth_values, rect, data_min, data_max)
 
@@ -257,8 +292,69 @@ def draw_frame_chart(
 ) -> None:
     y_max = max(max(frames), max(FRAME_THRESHOLDS)) + 120.0
     y_min = 0.0
-    draw_line_chart(draw, rect, episodes, frames, "frame_steps", (35, 110, 210), font, small_font, y_min, y_max)
+    draw_line_chart(draw, rect, episodes, frames, "frame_steps / episode", (35, 110, 210), font, small_font, y_min, y_max)
     draw_frame_thresholds(draw, rect, y_min - max(1.0, y_max * 0.08), y_max + max(1.0, y_max * 0.08), small_font)
+
+
+# Build average reward points for total-step bins.
+def binned_reward_curve(total_steps: list[float], rewards: list[float], bins: int) -> tuple[list[float], list[float]]:
+    if not total_steps or not rewards:
+        return [], []
+
+    step_min = min(total_steps)
+    step_max = max(total_steps)
+    if math.isclose(step_min, step_max):
+        return [step_min], [sum(rewards) / len(rewards)]
+
+    bucket_sums = [0.0 for _ in range(bins)]
+    bucket_counts = [0 for _ in range(bins)]
+    for step, reward in zip(total_steps, rewards):
+        bucket = int((step - step_min) / (step_max - step_min) * bins)
+        bucket = min(bins - 1, max(0, bucket))
+        bucket_sums[bucket] += reward
+        bucket_counts[bucket] += 1
+
+    xs = []
+    ys = []
+    bucket_width = (step_max - step_min) / bins
+    for index, count in enumerate(bucket_counts):
+        if count <= 0:
+            continue
+        xs.append(step_min + (index + 0.5) * bucket_width)
+        ys.append(bucket_sums[index] / count)
+    return xs, ys
+
+
+# Draw reward as a function of total training steps.
+def draw_reward_step_chart(
+    draw: ImageDraw.ImageDraw,
+    rect: tuple[int, int, int, int],
+    total_steps: list[float],
+    rewards: list[float],
+    font: ImageFont.ImageFont,
+    small_font: ImageFont.ImageFont,
+) -> None:
+    if not total_steps or not rewards:
+        return
+
+    x_min = min(total_steps)
+    x_max = max(total_steps)
+    if math.isclose(x_min, x_max):
+        x_max = x_min + 1.0
+    y_min, y_max = padded_range(rewards)
+    draw_axes(draw, rect, "reward / total_steps", y_min, y_max, font, small_font)
+    draw_x_labels(draw, rect, x_min, x_max, small_font, tick_count=9)
+
+    points = scale_points(total_steps, rewards, rect, y_min, y_max, x_min, x_max)
+    for x, y in points:
+        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(190, 205, 220))
+
+    curve_xs, curve_ys = binned_reward_curve(total_steps, rewards, SCATTER_BINS)
+    curve_points = scale_points(curve_xs, curve_ys, rect, y_min, y_max, x_min, x_max) if curve_xs else []
+    if len(curve_points) > 1:
+        draw.line(curve_points, fill=(210, 65, 45), width=5)
+    for x, y in curve_points:
+        draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(210, 65, 45))
 
 
 # Draw a small text report inside the trend image.
@@ -291,21 +387,25 @@ def draw_training_trend(csv_path: Path, rows: list[dict[str, float]]) -> Path:
     small_font = load_font(18)
 
     episodes = [row["episode"] for row in rows]
+    total_steps = [row["global_step"] for row in rows]
+    if max(total_steps) <= 0.0:
+        running_steps = 0.0
+        total_steps = []
+        for row in rows:
+            running_steps += row["decision_steps"]
+            total_steps.append(running_steps)
     frames = [row["frame_steps"] for row in rows]
     rewards = [row["episode_reward"] for row in rows]
-    entropies = [row["entropy"] for row in rows]
-    value_losses = [row["value_loss"] for row in rows]
-    approx_kls = [row["approx_kl"] for row in rows]
 
     draw.text((PADDING, 24), f"Training trend: {csv_path.name}", fill=(15, 15, 15), font=title_font)
 
     panel_width = (WIDTH - PADDING * 2 - PANEL_GAP) // 2
-    panel_height = 245
+    panel_height = 275
     left_x = PADDING
     right_x = PADDING + panel_width + PANEL_GAP
     row_1_y = 105
-    row_2_y = row_1_y + panel_height + 74
-    row_3_y = row_2_y + panel_height + 74
+    row_2_y = row_1_y + panel_height + 90
+    wide_panel_width = WIDTH - PADDING * 2
 
     draw_frame_chart(draw, (left_x, row_1_y, left_x + panel_width, row_1_y + panel_height), episodes, frames, chart_font, small_font)
     draw_line_chart(
@@ -313,46 +413,16 @@ def draw_training_trend(csv_path: Path, rows: list[dict[str, float]]) -> Path:
         (right_x, row_1_y, right_x + panel_width, row_1_y + panel_height),
         episodes,
         rewards,
-        "episode_reward",
+        "reward / episode",
         (35, 140, 80),
         chart_font,
         small_font,
     )
-    draw_line_chart(
+    draw_reward_step_chart(
         draw,
-        (left_x, row_2_y, left_x + panel_width, row_2_y + panel_height),
-        episodes,
-        entropies,
-        "entropy",
-        (155, 95, 190),
-        chart_font,
-        small_font,
-    )
-    draw_line_chart(
-        draw,
-        (right_x, row_2_y, right_x + panel_width, row_2_y + panel_height),
-        episodes,
-        value_losses,
-        "value_loss",
-        (205, 105, 45),
-        chart_font,
-        small_font,
-    )
-    draw_line_chart(
-        draw,
-        (left_x, row_3_y, left_x + panel_width, row_3_y + panel_height),
-        episodes,
-        approx_kls,
-        "approx_kl",
-        (80, 130, 150),
-        chart_font,
-        small_font,
-        y_min=0.0,
-    )
-    draw_summary_panel(
-        draw,
-        (right_x, row_3_y, right_x + panel_width, row_3_y + panel_height),
-        build_summary_text(rows),
+        (left_x, row_2_y, left_x + wide_panel_width, row_2_y + panel_height),
+        total_steps,
+        rewards,
         chart_font,
         small_font,
     )

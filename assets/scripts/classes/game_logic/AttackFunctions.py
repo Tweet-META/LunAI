@@ -31,6 +31,7 @@ class AttackFunctions:
     @staticmethod
     def random(center: Vector2, number_of_bullets: int, bullet_data: BulletData, speed: float,
                angular_speed: float = 0):
+        # Create bullets with random outgoing angles.
         bullets = [
             Bullet(
                 bullet_data,
@@ -95,16 +96,16 @@ class AttackFunctions:
     @staticmethod
     def long_random(number_of_bullets: int, number_of_randoms: int, bullet_data: BulletData, speed: float,
                     start_time: float, delay: float, angular_speed: float = 0, rand_center=False):
+        # Schedule repeated random bullet bursts.
         attacks = [
             (
                 AttackFunctions.random,
                 round(start_time + delay * n, 3),
-                [Vector2 if not rand_center else\
+                [Vector2.zero() if not rand_center else\
             Vector2.one().rotate(random.randint(0, 360)) * 25, number_of_bullets, bullet_data, speed, angular_speed]
             )
             for n in range(number_of_randoms)
         ]
 
         return attacks
-
 

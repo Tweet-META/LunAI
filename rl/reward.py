@@ -5,10 +5,11 @@ import numpy as np
 
 NEAR_DANGER_SIGMA = 3.0
 NEAR_DANGER_PENALTY_SCALE = 0.02
-EDGE_MARGIN = 0.10
-SIDE_EDGE_PENALTY_SCALE = 0.02
-VERTICAL_EDGE_PENALTY_SCALE = 0.01
-CORNER_PENALTY_SCALE = 0.02
+EDGE_MARGIN = 0.14
+SIDE_EDGE_PENALTY_SCALE = 0.025
+VERTICAL_EDGE_PENALTY_SCALE = 0.015
+CORNER_PENALTY_SCALE = 0.04
+SAFE_STAY_REWARD = 0.003
 
 
 # Convert an action id into simple x and y movement signs.
@@ -81,6 +82,12 @@ def near_danger_penalty(observation: dict[str, np.ndarray]) -> float:
     return NEAR_DANGER_PENALTY_SCALE * danger
 
 
+# Check whether the red local map has any bullet near the player.
+def red_zone_has_bullets(observation: dict[str, np.ndarray]) -> bool:
+    red_occupancy = observation["red_occupancy"]
+    return float(np.max(red_occupancy)) > 0.0
+
+
 # Penalize camping near walls and corners.
 def boundary_penalty(observation: dict[str, np.ndarray]) -> float:
     player_features = observation["player_features"]
@@ -103,10 +110,20 @@ def boundary_penalty(observation: dict[str, np.ndarray]) -> float:
     bottom = max(0.0, EDGE_MARGIN - bottom_margin) / EDGE_MARGIN
     side_pressure = max(left, right)
     vertical_pressure = max(top, bottom)
+    corner_pressure = min(side_pressure, vertical_pressure)
     side_penalty = SIDE_EDGE_PENALTY_SCALE * side_pressure
     vertical_penalty = VERTICAL_EDGE_PENALTY_SCALE * vertical_pressure
-    corner_penalty = CORNER_PENALTY_SCALE * side_pressure * vertical_pressure
+    corner_penalty = CORNER_PENALTY_SCALE * corner_pressure
     return side_penalty + vertical_penalty + corner_penalty
+
+
+# Reward staying still only when the red local map is empty.
+def safe_stay_reward(observation: dict[str, np.ndarray], action: int) -> float:
+    if action != 0:
+        return 0.0
+    if red_zone_has_bullets(observation):
+        return 0.0
+    return SAFE_STAY_REWARD
 
 
 # Compute a minimal baseline reward for one step.
@@ -116,10 +133,19 @@ def compute_reward(
     previous_action: int,
     collided: bool,
 ) -> float:
-    survival_reward = 0.03
+    survival_reward = 0.045
+    stay_reward = safe_stay_reward(observation, action)
     danger_penalty = near_danger_penalty(observation)
     wall_penalty = boundary_penalty(observation)
-    collision_penalty = 20.0 if collided else 0.0
+    collision_penalty = 15.0 if collided else 0.0
     action_change_penalty = 0.01 if action != previous_action else 0.0
     reversal_penalty = 0.03 if is_reversal(action, previous_action) else 0.0
-    return survival_reward - danger_penalty - wall_penalty - collision_penalty - action_change_penalty - reversal_penalty
+    return (
+        survival_reward
+        + stay_reward
+        - danger_penalty
+        - wall_penalty
+        - collision_penalty
+        - action_change_penalty
+        - reversal_penalty
+    )

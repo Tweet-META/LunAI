@@ -108,7 +108,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -131,7 +131,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -154,7 +154,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -177,7 +177,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -200,7 +200,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -223,7 +223,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -246,7 +246,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -269,7 +269,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -292,7 +292,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -315,7 +315,7 @@
       },
       "hp": 18,
       "attacks": [
-        ["wide_cone", 2, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 115, 8, 0.6, 0.65, 0]
+        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 105, 5, 0.75, 0.75, 0]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -338,7 +338,8 @@
       },
       "hp": 30,
       "attacks": [
-        ["wide_cone", 1, 4, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.2, 0.9, 0]
+        ["wide_cone", 1, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.0, 0.75, 0],
+        ["long_random", 2, 3, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 115, 1.35, 0.8, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -361,7 +362,8 @@
       },
       "hp": 30,
       "attacks": [
-        ["wide_cone", 1, 4, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.2, 0.9, 0]
+        ["wide_cone", 1, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.0, 0.75, 0],
+        ["long_random", 2, 3, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 115, 1.35, 0.8, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -384,7 +386,8 @@
       },
       "hp": 30,
       "attacks": [
-        ["wide_cone", 1, 4, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.2, 0.9, 0]
+        ["wide_cone", 1, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.0, 0.75, 0],
+        ["long_random", 2, 3, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 115, 1.35, 0.8, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -407,7 +410,8 @@
       },
       "hp": 30,
       "attacks": [
-        ["wide_cone", 1, 4, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.2, 0.9, 0]
+        ["wide_cone", 1, 5, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 125, 0, 1.0, 0.75, 0],
+        ["long_random", 2, 3, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 115, 1.35, 0.8, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -430,7 +434,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 135, 10, 0.5, 0.55, 0]
+        ["long_random", 4, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 135, 0.45, 0.5, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -453,7 +457,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 135, 10, 0.5, 0.55, 0]
+        ["long_random", 4, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 135, 0.45, 0.5, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -476,7 +480,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 135, 10, 0.5, 0.55, 0]
+        ["long_random", 4, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 135, 0.45, 0.5, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -499,7 +503,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 135, 10, 0.5, 0.55, 0]
+        ["long_random", 4, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 135, 0.45, 0.5, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -522,7 +526,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 135, 10, 0.5, 0.55, 0]
+        ["long_random", 4, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 135, 0.45, 0.5, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -545,7 +549,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 5, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 135, 10, 0.5, 0.55, 0]
+        ["long_random", 4, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 135, 0.45, 0.5, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -568,7 +572,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 145, 12, 0.45, 0.5, 0]
+        ["long_random", 5, 7, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 145, 0.4, 0.45, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -591,7 +595,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 145, 12, 0.45, 0.5, 0]
+        ["long_random", 5, 7, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 145, 0.4, 0.45, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -614,7 +618,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 145, 12, 0.45, 0.5, 0]
+        ["long_random", 5, 7, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 145, 0.4, 0.45, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
@@ -637,7 +641,7 @@
       },
       "hp": 25,
       "attacks": [
-        ["wide_cone", 3, 6, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], "player", 145, 12, 0.45, 0.5, 0]
+        ["long_random", 5, 7, [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 6, [0, 0]], 145, 0.4, 0.45, 0, false]
       ],
       "drop": {
         "list": ["points", "power_small", "nothing"],
