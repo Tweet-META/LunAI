@@ -37,11 +37,15 @@ class TouhouRLEnv:
         max_steps: int | None = None,
         action_repeat: int = 3,
         level_file: str = "level_1.json",
+        random_player_start: bool = False,
+        player_start_margin: float = 80.0,
     ):
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.action_repeat = max(1, int(action_repeat))
         self.level_file = level_file
+        self.random_player_start = random_player_start
+        self.player_start_margin = float(player_start_margin)
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -105,6 +109,8 @@ class TouhouRLEnv:
         from assets.scripts.scenes.GameScene import GameScene
 
         self.scene = GameScene(level_file=self.level_file)
+        if self.random_player_start:
+            self._randomize_player_start()
         self.steps = 0
         self.frame_steps = 0
         self.previous_action = 0
@@ -231,6 +237,21 @@ class TouhouRLEnv:
             7: v.down() + v.left(),
             8: v.down() + v.right(),
         }[action]
+
+    # Move the player to a random lower-field start position for training.
+    def _randomize_player_start(self) -> None:
+        margin = max(0.0, self.player_start_margin)
+        left = self.GAME_ZONE[0] + margin
+        right = self.GAME_ZONE[0] + self.GAME_ZONE[2] - margin
+        top = self.GAME_ZONE[1] + self.GAME_ZONE[3] * 0.55
+        bottom = self.GAME_ZONE[1] + self.GAME_ZONE[3] - margin
+        if right <= left or bottom <= top:
+            return
+
+        x = float(np.random.uniform(left, right))
+        y = float(np.random.uniform(top, bottom))
+        self.scene.player.position = self.Vector2(x, y)
+        self.scene.player.collider.position = self.scene.player.position
 
     # Draw live reward information on the game screen.
     def _draw_reward_panel(self) -> None:
