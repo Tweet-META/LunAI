@@ -7,11 +7,11 @@ from pathlib import Path
 import numpy as np
 
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from rl.dqn_agent import DQNAgent, load_dqn_config
+from rl.legacy_dqn.dqn_agent import DQNAgent, load_dqn_config
 from rl.observation_utils import flatten_observation, observation_dim
 from rl.touhou_rl_env import TouhouRLEnv
 

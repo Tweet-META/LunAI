@@ -9,13 +9,13 @@ import numpy as np
 import torch
 
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from rl.dqn_agent import DQNAgent, DQNConfig
+from rl.legacy_dqn.dqn_agent import DQNAgent, DQNConfig
+from rl.legacy_dqn.replay_buffer import ReplayBuffer
 from rl.observation_utils import flatten_observation, observation_dim, validate_flat_observation
-from rl.replay_buffer import ReplayBuffer
 from rl.touhou_rl_env import TouhouRLEnv
 
 

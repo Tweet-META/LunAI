@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from rl.replay_buffer import ReplayBatch
+from rl.legacy_dqn.replay_buffer import ReplayBatch
 
 
 @dataclass
