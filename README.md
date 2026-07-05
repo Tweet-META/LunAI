@@ -1,18 +1,42 @@
-﻿# pygame-touhou
+# LunAI
 
-fan made game based on touhou project
+LunAI is a reinforcement learning project for training bullet-hell game agents in a pygame-based Touhou-style environment.
 
-## controls:  
-### Game:
-moving - ↑ , ↓ , ←  , →  
-shoot - Z  
-slow down - SHIFT
+The current project focuses on building a usable RL environment, multi-scale bullet observations, reward functions, curriculum stages, and PPO/DQN baseline agents.
 
-### Menu:
-select - Enter, Z  
-cancel - X
+## Project Scope
 
-### Desmos graph for enemy paths (probably will update for easier usage in future):
-https://www.desmos.com/calculator/5c8fd19ayv
+This repository includes:
 
-## All characters and music belong to ZUN and Team Shanghai Alice 
+- a modified pygame Touhou-style game environment
+- blue/yellow/red multi-scale observation maps
+- RL environment wrappers
+- reward function design
+- DQN and PPO baseline training scripts
+- curriculum levels for staged training
+- evaluation and visualization tools
+
+## Acknowledgements
+
+The game environment in this project is adapted from the original `pygame-touhou` project by Leonid Ushakov, which is licensed under the MIT License.
+
+The reinforcement learning components, including the observation representation, reward design, environment wrapper, curriculum levels, training scripts, evaluation tools, and visualization utilities, were developed for the LunAI project.
+
+All Touhou Project characters, music, and related intellectual property belong to ZUN and Team Shanghai Alice.
+
+## Controls
+
+### Game
+
+- Move: arrow keys
+- Shoot: `Z`
+- Slow movement: `Shift`
+
+### Menu
+
+- Select: `Enter` or `Z`
+- Cancel: `X`
+
+## License
+
+This project is released under the MIT License. The original game environment copyright notice is preserved in [LICENSE](LICENSE).
