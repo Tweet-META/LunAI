@@ -2,7 +2,7 @@
 
 LunAI is a reinforcement learning project for training bullet-hell game agents in a pygame-based Touhou-style environment.
 
-The current project focuses on building a usable RL environment, multi-scale bullet observations, reward functions, curriculum stages, and PPO baseline agents.
+The current project focuses on building a usable RL environment, multi-scale bullet observations, reward functions, curriculum stages, and PPO baseline agents. The MLP PPO agent is kept as the baseline, while the CNN PPO agent is the next experimental training path.
 
 ## Project Scope
 
@@ -12,10 +12,25 @@ This repository includes:
 - blue/yellow/red multi-scale observation maps
 - RL environment wrappers
 - reward function design
-- PPO baseline training scripts
+- MLP PPO baseline training scripts
+- CNN PPO training and evaluation scripts
 - legacy DQN baseline code under `rl/legacy_dqn/`
 - curriculum levels for staged training
 - evaluation and visualization tools
+
+## RL Entry Points
+
+MLP PPO baseline:
+
+```powershell
+python rl/train_ppo.py --episodes 300 --level-file level_1.json
+```
+
+CNN PPO experiment:
+
+```powershell
+python rl/train_ppo_cnn.py --episodes 300 --level-file level_1.json
+```
 
 ## Acknowledgements
 
