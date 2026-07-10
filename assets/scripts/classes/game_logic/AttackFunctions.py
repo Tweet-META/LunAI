@@ -12,6 +12,14 @@ from assets.scripts.math_and_data.Vector2 import Vector2
 class AttackFunctions:
     delta_angle = 0
 
+    # Return the bullet angle that points from origin to target.
+    @staticmethod
+    def aimed_angle(origin: Vector2, target: Vector2) -> float:
+        direction = target - origin
+        if direction.length() <= 1e-8:
+            return 0.0
+        return float(np.rad2deg(np.arctan2(-direction.x(), -direction.y())))
+
     @staticmethod
     def ring(center: Vector2, number_of_bullets: int, bullet_data: BulletData, speed: float, angular_speed: float = 0,
              delta_angle: float = 0):
@@ -47,11 +55,12 @@ class AttackFunctions:
 
     @staticmethod
     def cone(center: Vector2, angle, number_of_bullets: int, bullet_data: BulletData, speed: float, delta_angle: int, angular_speed=0, player: Player=None, enemy: Enemy=None):
+        aimed_angle = angle if angle != "player" else AttackFunctions.aimed_angle(enemy.position, player.position)
         bullets = [
             Bullet(
                 bullet_data,
                 center,
-                (angle if angle != "player" else np.rad2deg(Vector2.angle_between(enemy.position - player.position, Vector2.right())) + 90) + i * delta_angle * 0.5,
+                aimed_angle + i * delta_angle * 0.5,
                 speed,
                 angular_speed
             )
@@ -108,4 +117,3 @@ class AttackFunctions:
         ]
 
         return attacks
-
