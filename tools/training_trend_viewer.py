@@ -265,24 +265,7 @@ def draw_line_chart(
     draw.text((right - 210, top + 8), f"MA{MOVING_AVERAGE_WINDOW}", fill=color, font=small_font)
 
 
-# Draw threshold lines on the frame chart.
-def draw_frame_thresholds(
-    draw: ImageDraw.ImageDraw,
-    rect: tuple[int, int, int, int],
-    y_min: float,
-    y_max: float,
-    small_font: ImageFont.ImageFont,
-) -> None:
-    left, top, right, bottom = rect
-    for threshold in FRAME_THRESHOLDS[1:]:
-        if not (y_min <= threshold <= y_max):
-            continue
-        y = bottom - int((threshold - y_min) / (y_max - y_min) * (bottom - top))
-        draw.line((left, y, right, y), fill=(230, 170, 170), width=2)
-        draw.text((right - 76, y - 18), str(threshold), fill=(150, 70, 70), font=small_font)
-
-
-# Draw a frame-step chart with useful survival thresholds.
+# Draw a frame-step chart using the observed episode range.
 def draw_frame_chart(
     draw: ImageDraw.ImageDraw,
     rect: tuple[int, int, int, int],
@@ -291,10 +274,10 @@ def draw_frame_chart(
     font: ImageFont.ImageFont,
     small_font: ImageFont.ImageFont,
 ) -> None:
-    y_max = max(max(frames), max(FRAME_THRESHOLDS)) + 120.0
+    observed_max = max(1.0, max(frames))
+    y_max = observed_max * 1.25
     y_min = 0.0
     draw_line_chart(draw, rect, episodes, frames, "frame_steps / episode", (35, 110, 210), font, small_font, y_min, y_max)
-    draw_frame_thresholds(draw, rect, y_min - max(1.0, y_max * 0.08), y_max + max(1.0, y_max * 0.08), small_font)
 
 
 # Build average reward points for total-step bins.

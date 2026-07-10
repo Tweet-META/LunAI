@@ -8,7 +8,6 @@ EDGE_MARGIN = 0.14
 SIDE_EDGE_PENALTY_SCALE = 0.025
 VERTICAL_EDGE_PENALTY_SCALE = 0.02
 CORNER_PENALTY_SCALE = 0.055
-SAFE_STAY_REWARD = 0.006
 
 
 # Convert an action id into simple x and y movement signs.
@@ -88,12 +87,6 @@ def near_danger_penalty(observation: dict[str, np.ndarray]) -> float:
     return NEAR_DANGER_PENALTY_SCALE * danger
 
 
-# Check whether the red local map has any bullet near the player.
-def red_zone_has_bullets(observation: dict[str, np.ndarray]) -> bool:
-    red_occupancy = observation["red_occupancy"]
-    return float(np.max(red_occupancy)) > 0.0
-
-
 # Penalize camping near walls and corners.
 def boundary_penalty(observation: dict[str, np.ndarray]) -> float:
     player_features = observation["player_features"]
@@ -123,15 +116,6 @@ def boundary_penalty(observation: dict[str, np.ndarray]) -> float:
     return side_penalty + vertical_penalty + corner_penalty
 
 
-# Reward staying still only when the red local map is empty.
-def safe_stay_reward(observation: dict[str, np.ndarray], action: int) -> float:
-    if action != 0:
-        return 0.0
-    if red_zone_has_bullets(observation):
-        return 0.0
-    return SAFE_STAY_REWARD
-
-
 # Compute a minimal baseline reward for one step.
 def compute_reward(
     observation: dict[str, np.ndarray],
@@ -140,7 +124,6 @@ def compute_reward(
     collided: bool,
 ) -> float:
     survival_reward = 0.1
-    stay_reward = safe_stay_reward(observation, action)
     danger_penalty = near_danger_penalty(observation)
     wall_penalty = boundary_penalty(observation)
     collision_penalty = 50.0 if collided else 0.0
@@ -148,7 +131,6 @@ def compute_reward(
     reversal_penalty = 0.02 if is_reversal(action, previous_action) else 0.0
     return (
         survival_reward
-        + stay_reward
         - danger_penalty
         - wall_penalty
         - collision_penalty
