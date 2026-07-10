@@ -15,15 +15,21 @@ if str(PROJECT_DIR) not in sys.path:
 from rl.cnn_observation_utils import CNNObservation, cnn_observation, cnn_observation_shapes, stack_cnn_observations
 from rl.ppo_cnn_agent import CNNPPOAgent, CNNPPOConfig, load_cnn_ppo_config
 from rl.touhou_rl_env import TouhouRLEnv
-from rl.train_ppo import append_log, compute_gae, ensure_parent_dir, linear_schedule, write_log_header
+from rl.train_ppo import (
+    append_log,
+    compute_gae,
+    ensure_parent_dir,
+    linear_schedule,
+    training_limit_reached,
+    training_progress,
+    training_stop_reason,
+    write_log_header,
+)
 
 
 # Apply scheduled PPO hyperparameters before one update.
 def update_scheduled_hyperparams(agent: CNNPPOAgent, args: argparse.Namespace, counters: dict[str, int]) -> None:
-    if args.episodes <= 1:
-        progress = 1.0
-    else:
-        progress = (counters["episode"] - 1) / (args.episodes - 1)
+    progress = training_progress(args, counters)
 
     entropy_coef_final = args.entropy_coef if args.entropy_coef_final < 0.0 else args.entropy_coef_final
     learning_rate_final = args.learning_rate if args.learning_rate_final < 0.0 else args.learning_rate_final
@@ -68,7 +74,11 @@ def collect_rollout(
     episode_collisions = counters.get("episode_collisions", 0)
     last_info = {}
 
-    while len(rollout["states"]) < args.rollout_steps and counters["episode"] <= args.episodes:
+    while (
+        len(rollout["states"]) < args.rollout_steps
+        and counters["episode"] <= args.episodes
+        and not training_limit_reached(args, counters)
+    ):
         action, log_prob, value = agent.select_action(state)
         next_observation, reward, done, info = env.step(action)
         next_state = cnn_observation(next_observation)
@@ -84,6 +94,10 @@ def collect_rollout(
         episode_reward += float(reward)
         episode_collisions += int(info.get("collided", False))
         counters["global_step"] += 1
+        current_frame_steps = int(info.get("frame_steps", 0))
+        frame_delta = max(0, current_frame_steps - counters["episode_frame_steps"])
+        counters["episode_frame_steps"] = current_frame_steps
+        counters["total_frame_steps"] += frame_delta
         last_info = info
 
         if done:
@@ -93,6 +107,7 @@ def collect_rollout(
                     counters["episode"],
                     counters["update"],
                     counters["global_step"],
+                    counters["total_frame_steps"],
                     info.get("decision_steps", 0),
                     info.get("frame_steps", 0),
                     f"{episode_reward:.6f}",
@@ -106,7 +121,7 @@ def collect_rollout(
             )
             print(
                 f"episode={counters['episode']}, update={counters['update']}, decision_steps={info.get('decision_steps', 0)}, "
-                f"frame_steps={info.get('frame_steps', 0)}, reward={episode_reward:.3f}, "
+                f"frame_steps={info.get('frame_steps', 0)}, total_frame_steps={counters['total_frame_steps']}, reward={episode_reward:.3f}, "
                 f"policy_loss={latest_metrics.get('policy_loss', 0.0):.5f}, value_loss={latest_metrics.get('value_loss', 0.0):.5f}, "
                 f"entropy={latest_metrics.get('entropy', 0.0):.5f}, kl={latest_metrics.get('approx_kl', 0.0):.5f}, "
                 f"hp={info.get('hp', 0)}, collisions={episode_collisions}"
@@ -114,8 +129,10 @@ def collect_rollout(
             counters["episode"] += 1
             episode_reward = 0.0
             episode_collisions = 0
-            observation = env.reset(seed=args.seed + counters["episode"])
-            state = cnn_observation(observation)
+            counters["episode_frame_steps"] = 0
+            if counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
+                observation = env.reset(seed=args.seed + counters["episode"])
+                state = cnn_observation(observation)
 
     counters["episode_reward"] = episode_reward
     counters["episode_collisions"] = episode_collisions
@@ -191,6 +208,8 @@ def train(args: argparse.Namespace) -> None:
         "episode": 1,
         "update": 0,
         "global_step": 0,
+        "total_frame_steps": 0,
+        "episode_frame_steps": 0,
         "episode_reward": 0.0,
         "episode_collisions": 0,
         "last_done": False,
@@ -198,7 +217,7 @@ def train(args: argparse.Namespace) -> None:
     latest_metrics = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0}
 
     try:
-        while counters["episode"] <= args.episodes:
+        while counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
             rollout, state = collect_rollout(env, agent, state, args, counters, log_path, latest_metrics)
             if not rollout["states"]:
                 break
@@ -226,6 +245,11 @@ def train(args: argparse.Namespace) -> None:
                 agent.save(str(model_path))
 
         agent.save(str(model_path))
+        print(
+            f"Training finished: reason={training_stop_reason(args, counters)}, "
+            f"episodes_completed={counters['episode'] - 1}, decision_steps={counters['global_step']}, "
+            f"total_frame_steps={counters['total_frame_steps']}"
+        )
     finally:
         env.close()
 
@@ -235,6 +259,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--max-steps", type=int, default=1800)
+    parser.add_argument("--max-total-frame-steps", type=int, default=0)
+    parser.add_argument("--max-total-decision-steps", type=int, default=0)
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--random-player-start", action="store_true")

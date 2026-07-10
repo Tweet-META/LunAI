@@ -33,6 +33,7 @@ def write_log_header(path: Path) -> None:
                 "episode",
                 "update",
                 "global_step",
+                "total_frame_steps",
                 "decision_steps",
                 "frame_steps",
                 "episode_reward",
@@ -83,12 +84,36 @@ def linear_schedule(start: float, end: float, progress: float) -> float:
     return start + (end - start) * clipped_progress
 
 
+# Return normalized progress for episode- or step-limited training.
+def training_progress(args: argparse.Namespace, counters: dict[str, int]) -> float:
+    if args.max_total_frame_steps > 0:
+        return counters["total_frame_steps"] / args.max_total_frame_steps
+    if args.max_total_decision_steps > 0:
+        return counters["global_step"] / args.max_total_decision_steps
+    if args.episodes <= 1:
+        return 1.0
+    return (counters["episode"] - 1) / (args.episodes - 1)
+
+
+# Check whether a global training budget has been reached.
+def training_limit_reached(args: argparse.Namespace, counters: dict[str, int]) -> bool:
+    frame_limit_reached = args.max_total_frame_steps > 0 and counters["total_frame_steps"] >= args.max_total_frame_steps
+    decision_limit_reached = args.max_total_decision_steps > 0 and counters["global_step"] >= args.max_total_decision_steps
+    return frame_limit_reached or decision_limit_reached
+
+
+# Describe which global training budget stopped the run.
+def training_stop_reason(args: argparse.Namespace, counters: dict[str, int]) -> str:
+    if args.max_total_frame_steps > 0 and counters["total_frame_steps"] >= args.max_total_frame_steps:
+        return f"max_total_frame_steps={args.max_total_frame_steps}"
+    if args.max_total_decision_steps > 0 and counters["global_step"] >= args.max_total_decision_steps:
+        return f"max_total_decision_steps={args.max_total_decision_steps}"
+    return "episode_limit"
+
+
 # Apply scheduled PPO hyperparameters before one update.
 def update_scheduled_hyperparams(agent: PPOAgent, args: argparse.Namespace, counters: dict[str, int]) -> None:
-    if args.episodes <= 1:
-        progress = 1.0
-    else:
-        progress = (counters["episode"] - 1) / (args.episodes - 1)
+    progress = training_progress(args, counters)
 
     entropy_coef_final = args.entropy_coef if args.entropy_coef_final < 0.0 else args.entropy_coef_final
     learning_rate_final = args.learning_rate if args.learning_rate_final < 0.0 else args.learning_rate_final
@@ -121,7 +146,11 @@ def collect_rollout(
     episode_collisions = counters.get("episode_collisions", 0)
     last_info = {}
 
-    while len(rollout["states"]) < args.rollout_steps and counters["episode"] <= args.episodes:
+    while (
+        len(rollout["states"]) < args.rollout_steps
+        and counters["episode"] <= args.episodes
+        and not training_limit_reached(args, counters)
+    ):
         action, log_prob, value = agent.select_action(state)
         next_observation, reward, done, info = env.step(action)
         next_state = flatten_observation(next_observation)
@@ -138,6 +167,10 @@ def collect_rollout(
         episode_reward += float(reward)
         episode_collisions += int(info.get("collided", False))
         counters["global_step"] += 1
+        current_frame_steps = int(info.get("frame_steps", 0))
+        frame_delta = max(0, current_frame_steps - counters["episode_frame_steps"])
+        counters["episode_frame_steps"] = current_frame_steps
+        counters["total_frame_steps"] += frame_delta
         last_info = info
 
         if done:
@@ -147,6 +180,7 @@ def collect_rollout(
                     counters["episode"],
                     counters["update"],
                     counters["global_step"],
+                    counters["total_frame_steps"],
                     info.get("decision_steps", 0),
                     info.get("frame_steps", 0),
                     f"{episode_reward:.6f}",
@@ -160,7 +194,7 @@ def collect_rollout(
             )
             print(
                 f"episode={counters['episode']}, update={counters['update']}, decision_steps={info.get('decision_steps', 0)}, "
-                f"frame_steps={info.get('frame_steps', 0)}, reward={episode_reward:.3f}, "
+                f"frame_steps={info.get('frame_steps', 0)}, total_frame_steps={counters['total_frame_steps']}, reward={episode_reward:.3f}, "
                 f"policy_loss={latest_metrics.get('policy_loss', 0.0):.5f}, value_loss={latest_metrics.get('value_loss', 0.0):.5f}, "
                 f"entropy={latest_metrics.get('entropy', 0.0):.5f}, kl={latest_metrics.get('approx_kl', 0.0):.5f}, "
                 f"hp={info.get('hp', 0)}, collisions={episode_collisions}"
@@ -168,9 +202,11 @@ def collect_rollout(
             counters["episode"] += 1
             episode_reward = 0.0
             episode_collisions = 0
-            observation = env.reset(seed=args.seed + counters["episode"])
-            state = flatten_observation(observation)
-            validate_flat_observation(state)
+            counters["episode_frame_steps"] = 0
+            if counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
+                observation = env.reset(seed=args.seed + counters["episode"])
+                state = flatten_observation(observation)
+                validate_flat_observation(state)
 
     counters["episode_reward"] = episode_reward
     counters["episode_collisions"] = episode_collisions
@@ -247,6 +283,8 @@ def train(args: argparse.Namespace) -> None:
         "episode": 1,
         "update": 0,
         "global_step": 0,
+        "total_frame_steps": 0,
+        "episode_frame_steps": 0,
         "episode_reward": 0.0,
         "episode_collisions": 0,
         "last_done": False,
@@ -254,7 +292,7 @@ def train(args: argparse.Namespace) -> None:
     latest_metrics = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0}
 
     try:
-        while counters["episode"] <= args.episodes:
+        while counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
             rollout, state = collect_rollout(env, agent, state, args, counters, log_path, latest_metrics)
             if not rollout["states"]:
                 break
@@ -282,6 +320,11 @@ def train(args: argparse.Namespace) -> None:
                 agent.save(str(model_path))
 
         agent.save(str(model_path))
+        print(
+            f"Training finished: reason={training_stop_reason(args, counters)}, "
+            f"episodes_completed={counters['episode'] - 1}, decision_steps={counters['global_step']}, "
+            f"total_frame_steps={counters['total_frame_steps']}"
+        )
     finally:
         env.close()
 
@@ -291,6 +334,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--max-steps", type=int, default=1800)
+    parser.add_argument("--max-total-frame-steps", type=int, default=0)
+    parser.add_argument("--max-total-decision-steps", type=int, default=0)
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--random-player-start", action="store_true")

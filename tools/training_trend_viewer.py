@@ -55,6 +55,7 @@ def read_training_log(path: Path) -> list[dict[str, float]]:
                 {
                     "episode": safe_int(raw_row.get("episode")),
                     "global_step": safe_float(raw_row.get("global_step")),
+                    "total_frame_steps": safe_float(raw_row.get("total_frame_steps")),
                     "frame_steps": safe_float(raw_row.get("frame_steps")),
                     "decision_steps": safe_float(raw_row.get("decision_steps")),
                     "episode_reward": safe_float(raw_row.get("episode_reward")),
@@ -387,12 +388,12 @@ def draw_training_trend(csv_path: Path, rows: list[dict[str, float]]) -> Path:
     small_font = load_font(18)
 
     episodes = [row["episode"] for row in rows]
-    total_steps = [row["global_step"] for row in rows]
+    total_steps = [row["total_frame_steps"] for row in rows]
     if max(total_steps) <= 0.0:
         running_steps = 0.0
         total_steps = []
         for row in rows:
-            running_steps += row["decision_steps"]
+            running_steps += row["frame_steps"]
             total_steps.append(running_steps)
     frames = [row["frame_steps"] for row in rows]
     rewards = [row["episode_reward"] for row in rows]
