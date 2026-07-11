@@ -48,7 +48,7 @@ def safe_int(value: object, default: int = 0) -> int:
 # Read one PPO or DQN training CSV file.
 def read_training_log(path: Path) -> list[dict[str, float]]:
     with path.open("r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(line for line in f if not line.lstrip().startswith("#"))
         rows = []
         for raw_row in reader:
             rows.append(

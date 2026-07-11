@@ -33,6 +33,8 @@ class Player(Entity):
         self.hp = hp
         self.reviving = False
         self.invincibility_timer = 0
+        self.training_invincible = False
+        self.collided_this_frame = False
 
         self.sprite_size = Vector2(self.sprite_sheet.x, self.sprite_sheet.y)
 
@@ -50,6 +52,7 @@ class Player(Entity):
 
     def update(self) -> None:
         delta_time = self.scene.delta_time
+        self.collided_this_frame = False
 
         if self.slow:
             self.slowRate += Vector2.one() * delta_time
@@ -59,12 +62,16 @@ class Player(Entity):
         if not self.reviving:
             for bullet in self.scene.enemy_bullets:
                 if bullet.collider.check_collision(self.collider):
-                    self.get_damage()
+                    self.collided_this_frame = True
+                    if not self.training_invincible:
+                        self.get_damage()
                     break
 
             for enemy in self.scene.enemies:
                 if enemy.collider.check_collision(self.collider):
-                    self.get_damage()
+                    self.collided_this_frame = True
+                    if not self.training_invincible:
+                        self.get_damage()
                     break
 
         for item in self.scene.items:

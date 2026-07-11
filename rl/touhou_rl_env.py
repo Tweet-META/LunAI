@@ -52,6 +52,7 @@ class TouhouRLEnv:
         player_start_margin: float = 80.0,
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
+        training_invincible: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
             raise ValueError(f"frame_stack must be in 1..5, got {frame_stack}.")
@@ -66,6 +67,7 @@ class TouhouRLEnv:
         self.frame_stack = int(frame_stack)
         self.frame_stack_interval = int(frame_stack_interval)
         self.map_history_size = 1 + (self.frame_stack - 1) * self.frame_stack_interval
+        self.training_invincible = bool(training_invincible)
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -130,6 +132,7 @@ class TouhouRLEnv:
         from assets.scripts.scenes.GameScene import GameScene
 
         self.scene = GameScene(level_file=self.level_file)
+        self.scene.player.training_invincible = self.training_invincible
         if self.random_player_start:
             self._randomize_player_start()
         self.steps = 0
@@ -154,6 +157,7 @@ class TouhouRLEnv:
 
         direction = self._action_to_vector(action)
         total_reward = 0.0
+        contact_frames = 0
         collided = False
         done = False
         observation = None
@@ -162,7 +166,6 @@ class TouhouRLEnv:
         self.steps += 1
 
         for _ in range(self.action_repeat):
-            previous_hp = self.scene.player.hp
             self.scene.player.slow = False
             self.scene.player.move(direction)
             self.scene.update(1 / self.FPS)
@@ -170,7 +173,8 @@ class TouhouRLEnv:
             self.frame_steps += 1
             observation = self.get_observation()
             self._append_map_snapshot(observation)
-            collided = self.scene.player.hp < previous_hp
+            collided = self.scene.player.collided_this_frame
+            contact_frames += int(collided)
             done = self._is_done(collided)
             frame_reward = compute_reward(
                 observation,
@@ -194,6 +198,7 @@ class TouhouRLEnv:
             "time": self.scene.time,
             "hp": self.scene.player.hp,
             "collided": collided,
+            "contact_frames": contact_frames,
             "steps": self.frame_steps,
             "decision_steps": self.steps,
             "frame_steps": self.frame_steps,
@@ -318,7 +323,7 @@ class TouhouRLEnv:
 
     # Check whether the current episode should stop.
     def _is_done(self, collided: bool) -> bool:
-        if collided:
+        if collided and not self.training_invincible:
             return True
         if self.max_steps is not None and self.frame_steps >= self.max_steps:
             return True

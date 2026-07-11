@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
 from pathlib import Path
 
@@ -23,10 +24,12 @@ def ensure_parent_dir(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-# Create a CSV log file with the PPO training header.
-def write_log_header(path: Path) -> None:
+# Create a CSV log file with optional run metadata and the PPO training header.
+def write_log_header(path: Path, run_config: dict[str, object] | None = None) -> None:
     ensure_parent_dir(path)
     with path.open("w", newline="", encoding="utf-8") as f:
+        if run_config is not None:
+            f.write(f"# run_config: {json.dumps(run_config, sort_keys=True)}\n")
         writer = csv.writer(f)
         writer.writerow(
             [
@@ -52,6 +55,40 @@ def append_log(path: Path, row: list[object]) -> None:
     with path.open("a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(row)
+
+
+# Load one JSON configuration file for a training run.
+def load_run_config(path_text: str) -> dict[str, object]:
+    path = Path(path_text)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            config = json.load(f)
+    except OSError as error:
+        raise ValueError(f"Could not read config file: {path}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Config file is not valid JSON: {path}") from error
+
+    if not isinstance(config, dict):
+        raise ValueError(f"Config file must contain one JSON object: {path}")
+    return config
+
+
+# Parse arguments after applying optional JSON defaults.
+def parse_args_with_config(parser: argparse.ArgumentParser) -> argparse.Namespace:
+    config_parser = argparse.ArgumentParser(add_help=False)
+    config_parser.add_argument("--config", type=str, default="")
+    preliminary_args, _ = config_parser.parse_known_args()
+
+    if preliminary_args.config:
+        config = load_run_config(preliminary_args.config)
+        valid_keys = {action.dest for action in parser._actions if action.dest != argparse.SUPPRESS}
+        unknown_keys = sorted(set(config) - valid_keys)
+        if unknown_keys:
+            unknown_text = ", ".join(unknown_keys)
+            raise ValueError(f"Unknown config keys: {unknown_text}")
+        parser.set_defaults(**config)
+
+    return parser.parse_args()
 
 
 # Compute GAE advantages and value targets for one rollout.
@@ -274,7 +311,7 @@ def train(args: argparse.Namespace) -> None:
 
     log_path = Path(args.log_path)
     model_path = Path(args.model_path)
-    write_log_header(log_path)
+    write_log_header(log_path, vars(args))
     ensure_parent_dir(model_path)
 
     state = flatten_observation(first_observation)
@@ -332,6 +369,7 @@ def train(args: argparse.Namespace) -> None:
 # Build the command line parser for PPO training.
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="")
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--max-total-frame-steps", type=int, default=0)
@@ -368,7 +406,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 # Parse arguments and start PPO training.
 def main() -> None:
     parser = build_arg_parser()
-    train(parser.parse_args())
+    train(parse_args_with_config(parser))
 
 
 if __name__ == "__main__":

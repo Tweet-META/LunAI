@@ -126,7 +126,7 @@ def compute_reward(
     survival_reward = 0.1
     danger_penalty = near_danger_penalty(observation)
     wall_penalty = boundary_penalty(observation)
-    collision_penalty = 50.0 if collided else 0.0
+    collision_penalty = 5.0 if collided else 0.0
     action_change_penalty = 0.005 if action != previous_action else 0.0
     reversal_penalty = 0.02 if is_reversal(action, previous_action) else 0.0
     return (

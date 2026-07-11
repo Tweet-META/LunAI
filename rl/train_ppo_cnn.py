@@ -20,6 +20,7 @@ from rl.train_ppo import (
     compute_gae,
     ensure_parent_dir,
     linear_schedule,
+    parse_args_with_config,
     training_limit_reached,
     training_progress,
     training_stop_reason,
@@ -106,7 +107,7 @@ def collect_rollout(
 
         state = next_state
         episode_reward += float(reward)
-        episode_collisions += int(info.get("collided", False))
+        episode_collisions += int(info.get("contact_frames", int(info.get("collided", False))))
         counters["global_step"] += 1
         current_frame_steps = int(info.get("frame_steps", 0))
         frame_delta = max(0, current_frame_steps - counters["episode_frame_steps"])
@@ -138,7 +139,7 @@ def collect_rollout(
                 f"frame_steps={info.get('frame_steps', 0)}, total_frame_steps={counters['total_frame_steps']}, reward={episode_reward:.3f}, "
                 f"policy_loss={latest_metrics.get('policy_loss', 0.0):.5f}, value_loss={latest_metrics.get('value_loss', 0.0):.5f}, "
                 f"entropy={latest_metrics.get('entropy', 0.0):.5f}, kl={latest_metrics.get('approx_kl', 0.0):.5f}, "
-                f"hp={info.get('hp', 0)}, collisions={episode_collisions}"
+                f"hp={info.get('hp', 0)}, contact_frames={episode_collisions}"
             )
             counters["episode"] += 1
             episode_reward = 0.0
@@ -168,6 +169,7 @@ def train(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
+        training_invincible=True,
     )
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
@@ -218,7 +220,7 @@ def train(args: argparse.Namespace) -> None:
 
     log_path = Path(args.log_path)
     model_path = Path(args.model_path)
-    write_log_header(log_path)
+    write_log_header(log_path, {**vars(args), "training_invincible": True})
     ensure_parent_dir(model_path)
 
     state = cnn_observation(first_observation, env.get_map_history())
@@ -275,6 +277,7 @@ def train(args: argparse.Namespace) -> None:
 # Build the command line parser for CNN PPO training.
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="")
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--max-total-frame-steps", type=int, default=0)
@@ -312,7 +315,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 # Parse arguments and start CNN PPO training.
 def main() -> None:
     parser = build_arg_parser()
-    train(parser.parse_args())
+    train(parse_args_with_config(parser))
 
 
 if __name__ == "__main__":
