@@ -25,10 +25,12 @@ class TouhouRLEnv:
         "blue_speed",
         "yellow_density",
         "yellow_speed",
+        "yellow_valid",
         "red_occupancy",
         "red_vx",
         "red_vy",
         "red_speed",
+        "red_valid",
     )
     ACTIONS = {
         0: "stay",

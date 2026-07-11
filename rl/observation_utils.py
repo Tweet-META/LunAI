@@ -8,10 +8,12 @@ OBSERVATION_KEYS = (
     "blue_speed",
     "yellow_density",
     "yellow_speed",
+    "yellow_valid",
     "red_occupancy",
     "red_vx",
     "red_vy",
     "red_speed",
+    "red_valid",
     "player_features",
 )
 

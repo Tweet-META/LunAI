@@ -17,11 +17,26 @@ def _screen_rect(window: np.ndarray | tuple[int, int, int, int], game_origin: tu
     return pygame.Rect(game_origin[0] + x1, game_origin[1] + y1, x2 - x1, y2 - y1)
 
 
+# Keep one local observation window inside the playable field for rendering.
+def _visible_window(window: np.ndarray, field_window: np.ndarray) -> tuple[int, int, int, int]:
+    x1, y1, x2, y2 = [int(v) for v in window]
+    field_x1, field_y1, field_x2, field_y2 = [int(v) for v in field_window]
+    return (
+        max(x1, field_x1),
+        max(y1, field_y1),
+        min(x2, field_x2),
+        min(y2, field_y2),
+    )
+
+
 # Draw blue, yellow, and red observation zones over the game.
 def draw_zone_overlay(screen: pygame.Surface, observation: dict[str, np.ndarray], game_origin: tuple[int, int]) -> None:
     draw_colored_rect(screen, _screen_rect(observation["_blue_window"], game_origin), BLUE_FILL, 2)
-    draw_colored_rect(screen, _screen_rect(observation["_yellow_window"], game_origin), YELLOW_FILL, 2)
-    draw_colored_rect(screen, _screen_rect(observation["_red_window"], game_origin), RED_FILL, 3)
+    field_window = observation["_blue_window"]
+    yellow_window = _visible_window(observation["_yellow_window"], field_window)
+    red_window = _visible_window(observation["_red_window"], field_window)
+    draw_colored_rect(screen, _screen_rect(yellow_window, game_origin), YELLOW_FILL, 2)
+    draw_colored_rect(screen, _screen_rect(red_window, game_origin), RED_FILL, 3)
 
 
 # Draw one translucent filled rectangle with a black border.
@@ -33,15 +48,24 @@ def draw_colored_rect(screen: pygame.Surface, rect: pygame.Rect, color: tuple[in
 
 
 # Draw black grid lines for one observation window.
-def draw_grid_lines(screen: pygame.Surface, window: np.ndarray, game_origin: tuple[int, int], grid_shape: tuple[int, int]) -> None:
+def draw_grid_lines(
+    screen: pygame.Surface,
+    window: np.ndarray,
+    field_window: np.ndarray,
+    game_origin: tuple[int, int],
+    grid_shape: tuple[int, int],
+) -> None:
     rect = _screen_rect(window, game_origin)
+    visible_rect = _screen_rect(_visible_window(window, field_window), game_origin)
     rows, cols = grid_shape
     for col in range(1, cols):
         x = rect.left + round(rect.width * col / cols)
-        pygame.draw.line(screen, BLACK, (x, rect.top), (x, rect.bottom), 1)
+        if visible_rect.left < x < visible_rect.right:
+            pygame.draw.line(screen, BLACK, (x, visible_rect.top), (x, visible_rect.bottom), 1)
     for row in range(1, rows):
         y = rect.top + round(rect.height * row / rows)
-        pygame.draw.line(screen, BLACK, (rect.left, y), (rect.right, y), 1)
+        if visible_rect.top < y < visible_rect.bottom:
+            pygame.draw.line(screen, BLACK, (visible_rect.left, y), (visible_rect.right, y), 1)
 
 
 def draw_realtime_overlay(
@@ -53,9 +77,10 @@ def draw_realtime_overlay(
     # Draw live zone overlays and optional grid lines.
     draw_zone_overlay(screen, observation, game_origin)
     if show_grids:
-        draw_grid_lines(screen, observation["_blue_window"], game_origin, observation["blue_density"].shape)
-        draw_grid_lines(screen, observation["_yellow_window"], game_origin, observation["yellow_density"].shape)
-        draw_grid_lines(screen, observation["_red_window"], game_origin, observation["red_occupancy"].shape)
+        field_window = observation["_blue_window"]
+        draw_grid_lines(screen, field_window, field_window, game_origin, observation["blue_density"].shape)
+        draw_grid_lines(screen, observation["_yellow_window"], field_window, game_origin, observation["yellow_density"].shape)
+        draw_grid_lines(screen, observation["_red_window"], field_window, game_origin, observation["red_occupancy"].shape)
 
 
 # Map a normalized value to a tinted heat color.
@@ -75,6 +100,7 @@ def draw_heatmap_panel(
     rect: pygame.Rect,
     tint: tuple[int, int, int],
     border_color: tuple[int, int, int] = BLACK,
+    valid_mask: np.ndarray | None = None,
 ) -> None:
     # Draw one fixed-size heatmap panel.
     rows, cols = values.shape
@@ -89,7 +115,10 @@ def draw_heatmap_panel(
                 max(1, round(cell_w)),
                 max(1, round(cell_h)),
             )
-            pygame.draw.rect(screen, heat_color(values[row, col], tint), cell)
+            color = heat_color(values[row, col], tint)
+            if valid_mask is not None and valid_mask[row, col] <= 0.0:
+                color = (8, 8, 8)
+            pygame.draw.rect(screen, color, cell)
     pygame.draw.rect(screen, border_color, rect, 2)
 
 
@@ -113,12 +142,12 @@ def draw_observation_panels(screen: pygame.Surface, observation: dict[str, np.nd
     x, y = origin
     draw_heatmap_panel(screen, observation["blue_density"], pygame.Rect(x, y, 120, 120), (70, 130, 255))
     draw_heatmap_panel(screen, observation["blue_speed"], pygame.Rect(x + 140, y, 120, 120), (80, 210, 255))
-    draw_heatmap_panel(screen, observation["yellow_density"], pygame.Rect(x, y + 145, 120, 120), (255, 220, 70))
-    draw_heatmap_panel(screen, observation["yellow_speed"], pygame.Rect(x + 140, y + 145, 120, 120), (255, 170, 60))
+    draw_heatmap_panel(screen, observation["yellow_density"], pygame.Rect(x, y + 145, 120, 120), (255, 220, 70), valid_mask=observation["yellow_valid"])
+    draw_heatmap_panel(screen, observation["yellow_speed"], pygame.Rect(x + 140, y + 145, 120, 120), (255, 170, 60), valid_mask=observation["yellow_valid"])
     red_occupancy_rect = pygame.Rect(x, y + 290, 120, 120)
     red_speed_rect = pygame.Rect(x + 140, y + 290, 120, 120)
-    draw_heatmap_panel(screen, observation["red_occupancy"], red_occupancy_rect, (255, 70, 70))
-    draw_heatmap_panel(screen, observation["red_speed"], red_speed_rect, (255, 120, 120))
+    draw_heatmap_panel(screen, observation["red_occupancy"], red_occupancy_rect, (255, 70, 70), valid_mask=observation["red_valid"])
+    draw_heatmap_panel(screen, observation["red_speed"], red_speed_rect, (255, 120, 120), valid_mask=observation["red_valid"])
     draw_player_hitbox_marker(screen, red_occupancy_rect, observation)
     draw_player_hitbox_marker(screen, red_speed_rect, observation)
 

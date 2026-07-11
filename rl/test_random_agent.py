@@ -19,10 +19,12 @@ OBS_KEYS = (
     "blue_speed",
     "yellow_density",
     "yellow_speed",
+    "yellow_valid",
     "red_occupancy",
     "red_vx",
     "red_vy",
     "red_speed",
+    "red_valid",
     "player_features",
 )
 
@@ -34,10 +36,12 @@ def validate_observation(observation: dict[str, np.ndarray]) -> None:
         "blue_speed": (6, 6),
         "yellow_density": (8, 8),
         "yellow_speed": (8, 8),
+        "yellow_valid": (8, 8),
         "red_occupancy": (64, 64),
         "red_vx": (64, 64),
         "red_vy": (64, 64),
         "red_speed": (64, 64),
+        "red_valid": (64, 64),
         "player_features": (8,),
     }
     for key, shape in expected_shapes.items():
@@ -47,7 +51,16 @@ def validate_observation(observation: dict[str, np.ndarray]) -> None:
         if not np.isfinite(value).all():
             raise AssertionError(f"{key} contains NaN or inf")
 
-    for key in ("blue_density", "blue_speed", "yellow_density", "yellow_speed", "red_occupancy", "red_speed"):
+    for key in (
+        "blue_density",
+        "blue_speed",
+        "yellow_density",
+        "yellow_speed",
+        "yellow_valid",
+        "red_occupancy",
+        "red_speed",
+        "red_valid",
+    ):
         value = observation[key]
         if value.min() < -1e-6 or value.max() > 1.0 + 1e-6:
             raise AssertionError(f"{key} should be in [0, 1], got min={value.min()}, max={value.max()}")

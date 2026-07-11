@@ -35,14 +35,10 @@ class ObservationConfig:
     max_speed: float = 500.0
 
 
-# Return a window centered on the player but clamped inside the field.
-def clamp_window(center_x: float, center_y: float, width: int, height: int, field_w: int, field_h: int) -> tuple[int, int, int, int]:
-    width = min(width, field_w)
-    height = min(height, field_h)
+# Return a player-centered window that may extend outside the field.
+def centered_window(center_x: float, center_y: float, width: int, height: int) -> tuple[int, int, int, int]:
     x1 = int(round(center_x - width / 2))
     y1 = int(round(center_y - height / 2))
-    x1 = max(0, min(x1, field_w - width))
-    y1 = max(0, min(y1, field_h - height))
     return x1, y1, x1 + width, y1 + height
 
 
@@ -77,10 +73,12 @@ def rectangle_sum(integral: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> f
     return float(integral[y2, x2] - integral[y1, x2] - integral[y2, x1] + integral[y1, x1])
 
 
-# Convert a window into a fixed-size hitbox density grid.
+# Convert a possibly padded window into a fixed-size hitbox density grid.
 def density_grid(integral: np.ndarray, window: tuple[int, int, int, int], grid_shape: tuple[int, int]) -> np.ndarray:
     x1, y1, x2, y2 = window
     rows, cols = grid_shape
+    field_h = integral.shape[0] - 1
+    field_w = integral.shape[1] - 1
     out = np.zeros((rows, cols), dtype=np.float32)
     xs = np.linspace(x1, x2, cols + 1).round().astype(int)
     ys = np.linspace(y1, y2, rows + 1).round().astype(int)
@@ -89,9 +87,48 @@ def density_grid(integral: np.ndarray, window: tuple[int, int, int, int], grid_s
         for col in range(cols):
             cx1, cx2 = xs[col], xs[col + 1]
             cy1, cy2 = ys[row], ys[row + 1]
-            area = max(1, (cx2 - cx1) * (cy2 - cy1))
-            out[row, col] = rectangle_sum(integral, cx1, cy1, cx2, cy2) / area
+            clipped_x1 = max(0, min(field_w, cx1))
+            clipped_x2 = max(0, min(field_w, cx2))
+            clipped_y1 = max(0, min(field_h, cy1))
+            clipped_y2 = max(0, min(field_h, cy2))
+            area = (clipped_x2 - clipped_x1) * (clipped_y2 - clipped_y1)
+            if area > 0:
+                out[row, col] = rectangle_sum(
+                    integral,
+                    clipped_x1,
+                    clipped_y1,
+                    clipped_x2,
+                    clipped_y2,
+                ) / area
     return np.clip(out, 0.0, 1.0)
+
+
+# Build a map that marks the playable fraction of every local cell.
+def valid_area_grid(
+    window: tuple[int, int, int, int],
+    grid_shape: tuple[int, int],
+    field_w: int,
+    field_h: int,
+) -> np.ndarray:
+    x1, y1, x2, y2 = window
+    rows, cols = grid_shape
+    valid = np.zeros((rows, cols), dtype=np.float32)
+    xs = np.linspace(x1, x2, cols + 1).round().astype(int)
+    ys = np.linspace(y1, y2, rows + 1).round().astype(int)
+
+    for row in range(rows):
+        for col in range(cols):
+            cell_x1, cell_x2 = xs[col], xs[col + 1]
+            cell_y1, cell_y2 = ys[row], ys[row + 1]
+            cell_area = max(1, (cell_x2 - cell_x1) * (cell_y2 - cell_y1))
+            clipped_x1 = max(0, min(field_w, cell_x1))
+            clipped_x2 = max(0, min(field_w, cell_x2))
+            clipped_y1 = max(0, min(field_h, cell_y1))
+            clipped_y2 = max(0, min(field_h, cell_y2))
+            playable_area = max(0, clipped_x2 - clipped_x1) * max(0, clipped_y2 - clipped_y1)
+            valid[row, col] = playable_area / cell_area
+
+    return valid
 
 
 def average_speed_grid(
@@ -175,12 +212,14 @@ class ObservationBuilder:
     def build(self, bullets: list[BulletState], player: PlayerState) -> dict[str, np.ndarray]:
         cfg = self.config
         full_window = (0, 0, cfg.playfield_width, cfg.playfield_height)
-        yellow_window = clamp_window(player.x, player.y, cfg.yellow_size[0], cfg.yellow_size[1], cfg.playfield_width, cfg.playfield_height)
-        red_window = clamp_window(player.x, player.y, cfg.red_size[0], cfg.red_size[1], cfg.playfield_width, cfg.playfield_height)
+        yellow_window = centered_window(player.x, player.y, cfg.yellow_size[0], cfg.yellow_size[1])
+        red_window = centered_window(player.x, player.y, cfg.red_size[0], cfg.red_size[1])
 
         occupancy = make_occupancy_map(cfg.playfield_width, cfg.playfield_height, bullets)
         integral = make_integral_image(occupancy)
         red_occ, red_vx, red_vy, red_speed = red_local_maps(bullets, red_window, cfg.red_map, cfg.max_speed)
+        yellow_valid = valid_area_grid(yellow_window, cfg.yellow_grid, cfg.playfield_width, cfg.playfield_height)
+        red_valid = valid_area_grid(red_window, cfg.red_map, cfg.playfield_width, cfg.playfield_height)
         player_x = np.clip(player.x / cfg.playfield_width, 0.0, 1.0)
         player_y = np.clip(player.y / cfg.playfield_height, 0.0, 1.0)
         left_margin = player_x
@@ -193,10 +232,12 @@ class ObservationBuilder:
             "blue_speed": average_speed_grid(bullets, full_window, cfg.blue_grid, cfg.max_speed),
             "yellow_density": density_grid(integral, yellow_window, cfg.yellow_grid),
             "yellow_speed": average_speed_grid(bullets, yellow_window, cfg.yellow_grid, cfg.max_speed),
+            "yellow_valid": yellow_valid,
             "red_occupancy": red_occ,
             "red_vx": red_vx,
             "red_vy": red_vy,
             "red_speed": red_speed,
+            "red_valid": red_valid,
             "player_features": np.array(
                 [
                     player_x,
