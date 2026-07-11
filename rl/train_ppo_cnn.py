@@ -41,7 +41,15 @@ def update_scheduled_hyperparams(agent: CNNPPOAgent, args: argparse.Namespace, c
 
 
 # Check that a loaded checkpoint matches the current observation shapes.
-def validate_checkpoint_shapes(config: CNNPPOConfig, shapes: dict[str, tuple[int, ...]]) -> None:
+def validate_checkpoint_shapes(
+    config: CNNPPOConfig,
+    shapes: dict[str, tuple[int, ...]],
+    frame_stack: int,
+) -> None:
+    if config.frame_stack != frame_stack:
+        raise ValueError(
+            f"Checkpoint frame_stack={config.frame_stack}, but --frame-stack={frame_stack}."
+        )
     if config.red_shape != shapes["red"]:
         raise ValueError(f"Checkpoint red_shape={config.red_shape}, but environment red_shape={shapes['red']}.")
     if config.yellow_shape != shapes["yellow"]:
@@ -81,7 +89,7 @@ def collect_rollout(
     ):
         action, log_prob, value = agent.select_action(state)
         next_observation, reward, done, info = env.step(action)
-        next_state = cnn_observation(next_observation)
+        next_state = cnn_observation(next_observation, env.get_map_history())
 
         rollout["states"].append(state)
         rollout["actions"].append(action)
@@ -132,7 +140,7 @@ def collect_rollout(
             counters["episode_frame_steps"] = 0
             if counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
                 observation = env.reset(seed=args.seed + counters["episode"])
-                state = cnn_observation(observation)
+                state = cnn_observation(observation, env.get_map_history())
 
     counters["episode_reward"] = episode_reward
     counters["episode_collisions"] = episode_collisions
@@ -152,14 +160,15 @@ def train(args: argparse.Namespace) -> None:
         level_file=args.level_file,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
+        frame_stack=args.frame_stack,
     )
     first_observation = env.reset(seed=args.seed)
-    shapes = cnn_observation_shapes(first_observation)
+    shapes = cnn_observation_shapes(first_observation, env.get_map_history())
 
     if args.load_path:
         load_path = Path(args.load_path)
         config = load_cnn_ppo_config(str(load_path), device=args.device)
-        validate_checkpoint_shapes(config, shapes)
+        validate_checkpoint_shapes(config, shapes, args.frame_stack)
         config.gamma = args.gamma
         config.gae_lambda = args.gae_lambda
         config.learning_rate = args.learning_rate
@@ -182,6 +191,7 @@ def train(args: argparse.Namespace) -> None:
                 yellow_shape=shapes["yellow"],
                 blue_shape=shapes["blue"],
                 player_dim=shapes["player"][0],
+                frame_stack=args.frame_stack,
                 action_dim=9,
                 hidden_dim=args.hidden_dim,
                 gamma=args.gamma,
@@ -203,7 +213,7 @@ def train(args: argparse.Namespace) -> None:
     write_log_header(log_path)
     ensure_parent_dir(model_path)
 
-    state = cnn_observation(first_observation)
+    state = cnn_observation(first_observation, env.get_map_history())
     counters = {
         "episode": 1,
         "update": 0,
@@ -262,6 +272,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-total-frame-steps", type=int, default=0)
     parser.add_argument("--max-total-decision-steps", type=int, default=0)
     parser.add_argument("--action-repeat", type=int, default=3)
+    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--random-player-start", action="store_true")
     parser.add_argument("--player-start-margin", type=float, default=80.0)

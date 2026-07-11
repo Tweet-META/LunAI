@@ -17,7 +17,7 @@ from assets.scripts.math_and_data.enviroment import *
 from PIL import Image
 
 
-PLAY_LEVEL_SEQUENCE = ["level_1.json", "level_2.json", "level_3.json", "level_4.json", "level_5.json"]
+PLAY_LEVEL_SEQUENCE = ["level_1.json", "level_2.json", "level_3.json", "level_4.json", "level_5.json", "level_6.json"]
 
 
 class GameScene(Scene):

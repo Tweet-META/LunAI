@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,16 @@ if str(PROJECT_DIR) not in sys.path:
 
 
 class TouhouRLEnv:
+    MAP_KEYS = (
+        "blue_density",
+        "blue_speed",
+        "yellow_density",
+        "yellow_speed",
+        "red_occupancy",
+        "red_vx",
+        "red_vy",
+        "red_speed",
+    )
     ACTIONS = {
         0: "stay",
         1: "up",
@@ -39,13 +50,17 @@ class TouhouRLEnv:
         level_file: str = "level_1.json",
         random_player_start: bool = False,
         player_start_margin: float = 80.0,
+        frame_stack: int = 1,
     ):
+        if not 1 <= int(frame_stack) <= 5:
+            raise ValueError(f"frame_stack must be in 1..5, got {frame_stack}.")
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.action_repeat = max(1, int(action_repeat))
         self.level_file = level_file
         self.random_player_start = random_player_start
         self.player_start_margin = float(player_start_margin)
+        self.frame_stack = int(frame_stack)
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -77,6 +92,7 @@ class TouhouRLEnv:
         self.frame_steps = 0
         self.previous_action = 0
         self.previous_enemy_positions: dict[int, tuple[float, float]] = {}
+        self.map_history: deque[dict[str, np.ndarray]] = deque(maxlen=self.frame_stack)
         self.last_hp = 0
         self.last_observation = None
         self.last_reward = 0.0
@@ -117,6 +133,7 @@ class TouhouRLEnv:
         self.previous_enemy_positions = {}
         self.last_hp = self.scene.player.hp
         self.last_observation = self.get_observation()
+        self._reset_map_history(self.last_observation)
         self.last_reward = 0.0
         self.episode_reward = 0.0
         self.last_collided = False
@@ -147,6 +164,7 @@ class TouhouRLEnv:
 
             self.frame_steps += 1
             observation = self.get_observation()
+            self._append_map_snapshot(observation)
             collided = self.scene.player.hp < previous_hp
             done = self._is_done(collided)
             frame_reward = compute_reward(
@@ -195,6 +213,26 @@ class TouhouRLEnv:
             1 / self.FPS,
         )
         return self.builder.build(bullets, player)
+
+    # Return map snapshots from the oldest stored frame to the current frame.
+    def get_map_history(self) -> tuple[dict[str, np.ndarray], ...]:
+        if len(self.map_history) != self.frame_stack:
+            raise RuntimeError("Map history is not initialized. Call reset() before requesting it.")
+        return tuple(self.map_history)
+
+    # Reset the map history by repeating the initial game-frame map.
+    def _reset_map_history(self, observation: dict[str, np.ndarray]) -> None:
+        self.map_history.clear()
+        for _ in range(self.frame_stack):
+            self._append_map_snapshot(observation)
+
+    # Save the current frame's bullet maps without storing player features.
+    def _append_map_snapshot(self, observation: dict[str, np.ndarray]) -> None:
+        snapshot = {
+            key: np.asarray(observation[key], dtype=np.float32).copy()
+            for key in self.MAP_KEYS
+        }
+        self.map_history.append(snapshot)
 
     # Render the game and debug observation panels in human mode.
     def render(self) -> None:

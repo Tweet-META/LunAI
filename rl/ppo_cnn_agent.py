@@ -17,6 +17,7 @@ class CNNPPOConfig:
     yellow_shape: tuple[int, int, int]
     blue_shape: tuple[int, int, int]
     player_dim: int
+    frame_stack: int = 1
     action_dim: int = 9
     hidden_dim: int = 128
     gamma: float = 0.99
@@ -245,6 +246,7 @@ class CNNPPOAgent:
 def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     checkpoint = torch.load(path, map_location="cpu")
     config_data = dict(checkpoint["config"])
+    config_data.setdefault("frame_stack", 1)
     config_data["red_shape"] = tuple(config_data["red_shape"])
     config_data["yellow_shape"] = tuple(config_data["yellow_shape"])
     config_data["blue_shape"] = tuple(config_data["blue_shape"])

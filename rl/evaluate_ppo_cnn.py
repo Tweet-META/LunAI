@@ -33,11 +33,12 @@ def evaluate(args: argparse.Namespace) -> None:
         level_file=args.level_file,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
+        frame_stack=args.frame_stack,
     )
     first_observation = env.reset(seed=args.seed)
-    shapes = cnn_observation_shapes(first_observation)
+    shapes = cnn_observation_shapes(first_observation, env.get_map_history())
     config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
-    validate_checkpoint_shapes(config, shapes)
+    validate_checkpoint_shapes(config, shapes, args.frame_stack)
 
     agent = CNNPPOAgent(config)
     agent.load(str(Path(args.model_path)))
@@ -49,7 +50,7 @@ def evaluate(args: argparse.Namespace) -> None:
     try:
         for episode in range(1, args.episodes + 1):
             observation = env.reset(seed=args.seed + episode)
-            state = cnn_observation(observation)
+            state = cnn_observation(observation, env.get_map_history())
             if args.print_action_probs:
                 print_action_probs(env, agent.action_probs(state))
 
@@ -66,7 +67,7 @@ def evaluate(args: argparse.Namespace) -> None:
                     action = agent.select_greedy_action(state)
                 action_counts[action] += 1
                 observation, reward, done, info = env.step(action)
-                state = cnn_observation(observation)
+                state = cnn_observation(observation, env.get_map_history())
                 total_reward += reward
                 total_collisions += int(info.get("collided", False))
                 last_info = info
@@ -103,6 +104,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--action-repeat", type=int, default=3)
+    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--random-player-start", action="store_true")
     parser.add_argument("--player-start-margin", type=float, default=80.0)
