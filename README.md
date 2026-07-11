@@ -40,7 +40,17 @@ python rl/train_ppo_cnn.py --config config.json --max-total-frame-steps 1000000
 
 Each new PPO log begins with a `# run_config:` JSON line containing the final effective parameters, including any command-line overrides. The trend viewer skips this metadata line automatically.
 
-`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. The CNN trainer currently uses an invincible-contact curriculum: a bullet or enemy-body contact does not end the training episode, but receives the collision penalty on every contact frame. CNN evaluation remains lethal, so reported evaluation survival is still based on real collisions.
+`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. The CNN trainer currently contains an experimental invincible-contact mode: a bullet or enemy-body contact does not end the training episode, but receives the collision penalty on every contact frame. CNN evaluation remains lethal. This training-evaluation mismatch is recorded as a failed v6 experiment and is not the recommended main training route.
+
+### Parallel Environment Sampling
+
+`--num-envs` defaults to `1`. The versioned `config.json` currently uses eight headless game environments on a CUDA-capable machine, while keeping one shared CNN PPO model in the main process:
+
+```powershell
+python rl/train_ppo_cnn.py --config config.json
+```
+
+The environment workers run pygame and observation building on CPU. The main process batches their observations for one GPU model, so workers do not create separate models or checkpoints. `rollout_steps` is the total PPO batch size and must be divisible by `num_envs`; the current `1024` gives eight environments `128` decisions each. Parallel training cannot use `--render`, and new CNN logs include an `env_id` column.
 
 ## Acknowledgements
 

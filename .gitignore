@@ -5,6 +5,9 @@ __pycache__/
 .ruff_cache/
 
 checkpoints/
-training_logs/
+training_logs/*
 failed_runs/
 plots/
+!training_logs/plots/
+training_logs/plots/*
+!training_logs/plots/reward_and_training_history.md

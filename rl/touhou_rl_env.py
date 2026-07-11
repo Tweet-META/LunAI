@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import sys
 from collections import deque
 from pathlib import Path
@@ -128,6 +129,7 @@ class TouhouRLEnv:
     def reset(self, seed: int | None = None) -> dict[str, np.ndarray]:
         if seed is not None:
             np.random.seed(seed)
+            random.seed(seed)
 
         from assets.scripts.scenes.GameScene import GameScene
 

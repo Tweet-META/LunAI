@@ -3,6 +3,7 @@
   "max_steps": 1392,
   "max_total_frame_steps": 100000,
   "max_total_decision_steps": 0,
+  "num_envs": 8,
   "action_repeat": 3,
   "frame_stack": 2,
   "frame_stack_interval": 2,
@@ -26,8 +27,8 @@
   "hidden_dim": 128,
   "save_interval": 5,
   "load_path": "",
-  "model_path": "checkpoints/lunai_v6_test2.pt",
-  "log_path": "training_logs/lunai_v6_test2.csv",
+  "model_path": "checkpoints/lunai_v5_test9.pt",
+  "log_path": "training_logs/lunai_v5_test9.csv",
   "device": "auto",
   "render": false
 }

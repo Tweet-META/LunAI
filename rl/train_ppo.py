@@ -25,29 +25,34 @@ def ensure_parent_dir(path: Path) -> None:
 
 
 # Create a CSV log file with optional run metadata and the PPO training header.
-def write_log_header(path: Path, run_config: dict[str, object] | None = None) -> None:
+def write_log_header(
+    path: Path,
+    run_config: dict[str, object] | None = None,
+    include_env_id: bool = False,
+) -> None:
     ensure_parent_dir(path)
     with path.open("w", newline="", encoding="utf-8") as f:
         if run_config is not None:
             f.write(f"# run_config: {json.dumps(run_config, sort_keys=True)}\n")
         writer = csv.writer(f)
-        writer.writerow(
-            [
-                "episode",
-                "update",
-                "global_step",
-                "total_frame_steps",
-                "decision_steps",
-                "frame_steps",
-                "episode_reward",
-                "policy_loss",
-                "value_loss",
-                "entropy",
-                "approx_kl",
-                "hp",
-                "collisions",
-            ]
-        )
+        header = [
+            "episode",
+            "update",
+            "global_step",
+            "total_frame_steps",
+            "decision_steps",
+            "frame_steps",
+            "episode_reward",
+            "policy_loss",
+            "value_loss",
+            "entropy",
+            "approx_kl",
+            "hp",
+            "collisions",
+        ]
+        if include_env_id:
+            header.append("env_id")
+        writer.writerow(header)
 
 
 # Append one row to the PPO training log.

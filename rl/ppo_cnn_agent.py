@@ -120,6 +120,20 @@ class CNNPPOAgent:
             log_prob = distribution.log_prob(action)
         return int(action.item()), float(log_prob.item()), float(values.item())
 
+    # Sample one action for every state in a batched observation.
+    def select_actions_batch(self, states: CNNObservation) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(states, batched=True)
+            logits, values = self.model(state_tensors)
+            distribution = Categorical(logits=logits)
+            actions = distribution.sample()
+            log_probs = distribution.log_prob(actions)
+        return (
+            actions.detach().cpu().numpy().astype(np.int64),
+            log_probs.detach().cpu().numpy().astype(np.float32),
+            values.detach().cpu().numpy().astype(np.float32),
+        )
+
     # Choose the highest-probability action for evaluation.
     def select_greedy_action(self, state: CNNObservation) -> int:
         with torch.no_grad():
@@ -141,6 +155,13 @@ class CNNPPOAgent:
             state_tensors = self._state_to_tensors(state)
             _, value = self.model(state_tensors)
         return float(value.item())
+
+    # Return one value estimate for every state in a batched observation.
+    def state_values_batch(self, states: CNNObservation) -> np.ndarray:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(states, batched=True)
+            _, values = self.model(state_tensors)
+        return values.detach().cpu().numpy().astype(np.float32)
 
     # Evaluate stored actions under the current policy.
     def evaluate_actions(
