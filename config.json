@@ -26,8 +26,8 @@
   "hidden_dim": 128,
   "save_interval": 5,
   "load_path": "",
-  "model_path": "checkpoints/lunai_v6_test1.pt",
-  "log_path": "training_logs/lunai_v6_test1.csv",
+  "model_path": "checkpoints/lunai_v6_test2.pt",
+  "log_path": "training_logs/lunai_v6_test2.csv",
   "device": "auto",
   "render": false
 }

@@ -29,16 +29,18 @@ python rl/train_ppo.py --episodes 300 --level-file level_1.json
 CNN PPO experiment:
 
 ```powershell
-python rl/train_ppo_cnn.py --episodes 300 --level-file level_1.json
+python rl/train_ppo_cnn.py --config config.json
 ```
 
-To train for a fixed environment-frame budget, set a large episode ceiling and add `--max-total-frame-steps`. For example, this stops close to one million game frames:
+`config.json` is the versioned baseline for the current experiment. Command-line values override the file, so a temporary budget change is concise:
 
 ```powershell
-python rl/train_ppo_cnn.py --episodes 1000000 --max-total-frame-steps 1000000 --level-file level_1.json
+python rl/train_ppo_cnn.py --config config.json --max-total-frame-steps 1000000
 ```
 
-`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets.
+Each new PPO log begins with a `# run_config:` JSON line containing the final effective parameters, including any command-line overrides. The trend viewer skips this metadata line automatically.
+
+`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. The CNN trainer currently uses an invincible-contact curriculum: a bullet or enemy-body contact does not end the training episode, but receives the collision penalty on every contact frame. CNN evaluation remains lethal, so reported evaluation survival is still based on real collisions.
 
 ## Acknowledgements
 
