@@ -34,11 +34,12 @@ def evaluate(args: argparse.Namespace) -> None:
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
+        frame_stack_interval=args.frame_stack_interval,
     )
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
     config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
-    validate_checkpoint_shapes(config, shapes, args.frame_stack)
+    validate_checkpoint_shapes(config, shapes, args.frame_stack, args.frame_stack_interval)
 
     agent = CNNPPOAgent(config)
     agent.load(str(Path(args.model_path)))
@@ -105,6 +106,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=1)
+    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--random-player-start", action="store_true")
     parser.add_argument("--player-start-margin", type=float, default=80.0)

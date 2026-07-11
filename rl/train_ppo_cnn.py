@@ -45,10 +45,16 @@ def validate_checkpoint_shapes(
     config: CNNPPOConfig,
     shapes: dict[str, tuple[int, ...]],
     frame_stack: int,
+    frame_stack_interval: int,
 ) -> None:
     if config.frame_stack != frame_stack:
         raise ValueError(
             f"Checkpoint frame_stack={config.frame_stack}, but --frame-stack={frame_stack}."
+        )
+    if config.frame_stack_interval != frame_stack_interval:
+        raise ValueError(
+            "Checkpoint frame_stack_interval="
+            f"{config.frame_stack_interval}, but --frame-stack-interval={frame_stack_interval}."
         )
     if config.red_shape != shapes["red"]:
         raise ValueError(f"Checkpoint red_shape={config.red_shape}, but environment red_shape={shapes['red']}.")
@@ -161,6 +167,7 @@ def train(args: argparse.Namespace) -> None:
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
+        frame_stack_interval=args.frame_stack_interval,
     )
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
@@ -168,7 +175,7 @@ def train(args: argparse.Namespace) -> None:
     if args.load_path:
         load_path = Path(args.load_path)
         config = load_cnn_ppo_config(str(load_path), device=args.device)
-        validate_checkpoint_shapes(config, shapes, args.frame_stack)
+        validate_checkpoint_shapes(config, shapes, args.frame_stack, args.frame_stack_interval)
         config.gamma = args.gamma
         config.gae_lambda = args.gae_lambda
         config.learning_rate = args.learning_rate
@@ -192,6 +199,7 @@ def train(args: argparse.Namespace) -> None:
                 blue_shape=shapes["blue"],
                 player_dim=shapes["player"][0],
                 frame_stack=args.frame_stack,
+                frame_stack_interval=args.frame_stack_interval,
                 action_dim=9,
                 hidden_dim=args.hidden_dim,
                 gamma=args.gamma,
@@ -273,6 +281,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-total-decision-steps", type=int, default=0)
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=1)
+    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--random-player-start", action="store_true")
     parser.add_argument("--player-start-margin", type=float, default=80.0)

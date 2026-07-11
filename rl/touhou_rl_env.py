@@ -51,9 +51,12 @@ class TouhouRLEnv:
         random_player_start: bool = False,
         player_start_margin: float = 80.0,
         frame_stack: int = 1,
+        frame_stack_interval: int = 1,
     ):
         if not 1 <= int(frame_stack) <= 5:
             raise ValueError(f"frame_stack must be in 1..5, got {frame_stack}.")
+        if not 1 <= int(frame_stack_interval) <= 5:
+            raise ValueError(f"frame_stack_interval must be in 1..5, got {frame_stack_interval}.")
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.action_repeat = max(1, int(action_repeat))
@@ -61,6 +64,8 @@ class TouhouRLEnv:
         self.random_player_start = random_player_start
         self.player_start_margin = float(player_start_margin)
         self.frame_stack = int(frame_stack)
+        self.frame_stack_interval = int(frame_stack_interval)
+        self.map_history_size = 1 + (self.frame_stack - 1) * self.frame_stack_interval
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -92,7 +97,7 @@ class TouhouRLEnv:
         self.frame_steps = 0
         self.previous_action = 0
         self.previous_enemy_positions: dict[int, tuple[float, float]] = {}
-        self.map_history: deque[dict[str, np.ndarray]] = deque(maxlen=self.frame_stack)
+        self.map_history: deque[dict[str, np.ndarray]] = deque(maxlen=self.map_history_size)
         self.last_hp = 0
         self.last_observation = None
         self.last_reward = 0.0
@@ -214,16 +219,19 @@ class TouhouRLEnv:
         )
         return self.builder.build(bullets, player)
 
-    # Return map snapshots from the oldest stored frame to the current frame.
+    # Return evenly spaced map snapshots from the oldest selected frame to the current frame.
     def get_map_history(self) -> tuple[dict[str, np.ndarray], ...]:
-        if len(self.map_history) != self.frame_stack:
+        if len(self.map_history) != self.map_history_size:
             raise RuntimeError("Map history is not initialized. Call reset() before requesting it.")
-        return tuple(self.map_history)
+        selected_frames = tuple(self.map_history)[::self.frame_stack_interval]
+        if len(selected_frames) != self.frame_stack:
+            raise RuntimeError("Map history does not match the requested frame stack.")
+        return selected_frames
 
     # Reset the map history by repeating the initial game-frame map.
     def _reset_map_history(self, observation: dict[str, np.ndarray]) -> None:
         self.map_history.clear()
-        for _ in range(self.frame_stack):
+        for _ in range(self.map_history_size):
             self._append_map_snapshot(observation)
 
     # Save the current frame's bullet maps without storing player features.

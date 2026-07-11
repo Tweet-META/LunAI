@@ -3,7 +3,7 @@ from pygame import mixer
 from os import listdir
 from os.path import join as path_join
 
-from assets.scripts.classes.sound.Sound import Sound
+from assets.scripts.classes.sound.Sound import AUDIO_ENABLED, Sound
 from assets.scripts.math_and_data.enviroment import DEFAULT_GLOBAL_VOLUME, DEFAULT_MUSIC_VOLUME
 
 
@@ -49,6 +49,9 @@ class MusicModule:
 
     @staticmethod
     def play_music(background: str, volume: float = DEFAULT_MUSIC_VOLUME) -> None:
+        if not AUDIO_ENABLED:
+            mixer.music.stop()
+            return
         from assets.scripts.math_and_data.enviroment import PATH
         mixer.music.load(path_join(PATH, "assets", "music", background))
         mixer.music.set_volume(volume)

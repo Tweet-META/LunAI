@@ -1,6 +1,9 @@
 from pygame import mixer
 from os.path import join as path_join
 
+AUDIO_ENABLED = False
+
+
 class Sound:
     def __init__(self, filename: str, duration: int = 0, fade: int = 0, volume: int = 1,
                  global_volume: float = 1) -> None:
@@ -15,6 +18,8 @@ class Sound:
         self.sound.set_volume(self.volume * self.global_volume)
 
     def __call__(self, volume) -> None:
+        if not AUDIO_ENABLED:
+            return
         self.sound.set_volume(volume * self.global_volume)
         self.sound.play(0, self.duration, self.fade)
 
@@ -26,4 +31,3 @@ class Sound:
         if global_volume:
             self.global_volume = global_volume
             self.sound.set_volume(self.volume * self.global_volume)
-
