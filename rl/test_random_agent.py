@@ -34,10 +34,10 @@ def validate_observation(observation: dict[str, np.ndarray]) -> None:
         "blue_speed": (6, 6),
         "yellow_density": (8, 8),
         "yellow_speed": (8, 8),
-        "red_occupancy": (32, 32),
-        "red_vx": (32, 32),
-        "red_vy": (32, 32),
-        "red_speed": (32, 32),
+        "red_occupancy": (64, 64),
+        "red_vx": (64, 64),
+        "red_vy": (64, 64),
+        "red_speed": (64, 64),
         "player_features": (8,),
     }
     for key, shape in expected_shapes.items():

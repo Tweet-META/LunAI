@@ -31,7 +31,7 @@ class ObservationConfig:
     yellow_size: tuple[int, int] = (320, 320)
     yellow_grid: tuple[int, int] = (8, 8)
     red_size: tuple[int, int] = (128, 128)
-    red_map: tuple[int, int] = (32, 32)
+    red_map: tuple[int, int] = (64, 64)
     max_speed: float = 500.0
 
 

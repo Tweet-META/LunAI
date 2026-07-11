@@ -43,7 +43,7 @@ class CNNActorCritic(nn.Module):
             nn.ReLU(),
             nn.Conv2d(16, 32, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.AdaptiveAvgPool2d((4, 4)),
+            nn.AdaptiveAvgPool2d((8, 8)),
             nn.Flatten(),
         )
         self.yellow_encoder = nn.Sequential(
@@ -62,7 +62,7 @@ class CNNActorCritic(nn.Module):
             nn.Linear(config.player_dim, 32),
             nn.ReLU(),
         )
-        feature_dim = 32 * 4 * 4 + 16 * 2 * 2 + 16 * 2 * 2 + 32
+        feature_dim = 32 * 8 * 8 + 16 * 2 * 2 + 16 * 2 * 2 + 32
         self.trunk = nn.Sequential(
             nn.Linear(feature_dim, config.hidden_dim),
             nn.ReLU(),

@@ -136,7 +136,7 @@ def main() -> None:
             yellow_size=(320, 320),
             yellow_grid=(8, 8),
             red_size=(128, 128),
-            red_map=(32, 32),
+            red_map=(64, 64),
             max_speed=500.0,
         )
     )

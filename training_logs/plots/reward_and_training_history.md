@@ -1800,3 +1800,16 @@ total_frame_steps 记录所有环境实际游戏帧的总数。
 training_logs/plots/reward_and_training_history.md 留出例外，使其会随代码推送；
 checkpoint、CSV 与生成趋势图仍被忽略，避免仓库包含大型训练产物。
 ```
+
+## 2026-07-11：精细红区观察版本
+
+```text
+红区空间范围保持 128×128 游戏像素，不扩大观察半径；red_map 从 32×32 改为 64×64。
+因此每个红区单元从约 4×4 像素变为约 2×2 像素，红区继续保留 occupancy、vx、vy、speed 四类信息。
+
+红区 CNN encoder 的 AdaptiveAvgPool 从 4×4 改为 8×8，避免新增的近身空间细节被直接平均回旧分辨率。
+yellow 和 blue 分支在本版本不变，分别保持 8×8 / pool 2×2 与 6×6 / pool 2×2。
+
+在 frame_stack=5、hidden_dim=128 下，CNN 可训练参数约为 302,394。
+该版本不能加载旧 32×32 红区 checkpoint，后续训练必须从头初始化。
+```
