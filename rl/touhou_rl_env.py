@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pygame
 
-from rl.reward import compute_reward
+from rl.reward import compute_frame_reward, danger_potential_shaping
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -55,6 +55,7 @@ class TouhouRLEnv:
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
         training_invincible: bool = False,
+        reward_gamma: float = 0.99,
     ):
         if not 1 <= int(frame_stack) <= 5:
             raise ValueError(f"frame_stack must be in 1..5, got {frame_stack}.")
@@ -70,6 +71,9 @@ class TouhouRLEnv:
         self.frame_stack_interval = int(frame_stack_interval)
         self.map_history_size = 1 + (self.frame_stack - 1) * self.frame_stack_interval
         self.training_invincible = bool(training_invincible)
+        if not 0.0 <= float(reward_gamma) <= 1.0:
+            raise ValueError(f"reward_gamma must be in [0, 1], got {reward_gamma}.")
+        self.reward_gamma = float(reward_gamma)
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -164,11 +168,14 @@ class TouhouRLEnv:
         collided = False
         done = False
         observation = None
+        decision_start_observation = self.last_observation
+        if decision_start_observation is None:
+            raise RuntimeError("The environment has no observation before stepping.")
         previous_action_for_reward = self.previous_action
         self.previous_action = action
         self.steps += 1
 
-        for _ in range(self.action_repeat):
+        for repeat_index in range(self.action_repeat):
             self.scene.player.slow = False
             self.scene.player.move(direction)
             self.scene.update(1 / self.FPS)
@@ -179,12 +186,14 @@ class TouhouRLEnv:
             collided = self.scene.player.collided_this_frame
             contact_frames += int(collided)
             done = self._is_done(collided)
-            frame_reward = compute_reward(
-                observation,
-                action,
-                previous_action_for_reward,
-                collided
-            )
+            frame_reward = compute_frame_reward(action, previous_action_for_reward, collided)
+            if done or repeat_index == self.action_repeat - 1:
+                frame_reward += danger_potential_shaping(
+                    decision_start_observation,
+                    observation,
+                    done,
+                    self.reward_gamma,
+                )
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp
             self.last_observation = observation

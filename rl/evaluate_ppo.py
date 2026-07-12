@@ -25,6 +25,7 @@ def print_action_probs(env: TouhouRLEnv, probs: np.ndarray) -> None:
 
 # Evaluate a saved PPO model.
 def evaluate(args: argparse.Namespace) -> None:
+    config = load_ppo_config(str(Path(args.model_path)), device=args.device)
     env = TouhouRLEnv(
         render_mode="human" if args.render else None,
         max_steps=args.max_steps,
@@ -32,10 +33,10 @@ def evaluate(args: argparse.Namespace) -> None:
         level_file=args.level_file,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
+        reward_gamma=config.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
-    config = load_ppo_config(str(Path(args.model_path)), device=args.device)
     if config.state_dim != state_dim:
         raise ValueError(f"Checkpoint state_dim={config.state_dim}, but environment state_dim={state_dim}.")
 

@@ -3,35 +3,10 @@ from __future__ import annotations
 import numpy as np
 
 
-NEAR_DANGER_PENALTY_SCALE = 0.03
-EDGE_MARGIN = 0.14
-SIDE_EDGE_PENALTY_SCALE = 0.025
-VERTICAL_EDGE_PENALTY_SCALE = 0.02
-CORNER_PENALTY_SCALE = 0.055
-
-
-# Convert an action id into simple x and y movement signs.
-def action_components(action: int) -> tuple[int, int]:
-    return {
-        0: (0, 0),
-        1: (0, -1),
-        2: (0, 1),
-        3: (-1, 0),
-        4: (1, 0),
-        5: (-1, -1),
-        6: (1, -1),
-        7: (-1, 1),
-        8: (1, 1),
-    }[action]
-
-
-# Check whether the current action reverses the previous movement.
-def is_reversal(action: int, previous_action: int) -> bool:
-    action_x, action_y = action_components(action)
-    previous_x, previous_y = action_components(previous_action)
-    reverse_x = action_x != 0 and previous_x != 0 and action_x != previous_x
-    reverse_y = action_y != 0 and previous_y != 0 and action_y != previous_y
-    return reverse_x or reverse_y
+SURVIVAL_REWARD = 0.1
+COLLISION_PENALTY = 50.0
+ACTION_CHANGE_PENALTY = 0.005
+DANGER_POTENTIAL_BETA = 0.1
 
 
 # Convert the normalized player position into red-map cell coordinates.
@@ -81,59 +56,27 @@ def nearby_bullet_danger(observation: dict[str, np.ndarray]) -> float:
     return float(np.clip(0.8 * occupancy_danger + 0.2 * speed_danger, 0.0, 1.0))
 
 
-# Penalize bullets that are too close to the player.
-def near_danger_penalty(observation: dict[str, np.ndarray]) -> float:
-    danger = nearby_bullet_danger(observation)
-    return NEAR_DANGER_PENALTY_SCALE * danger
+# Convert local danger into a state potential.
+def danger_potential(observation: dict[str, np.ndarray]) -> float:
+    return -DANGER_POTENTIAL_BETA * nearby_bullet_danger(observation)
 
 
-# Penalize camping near walls and corners.
-def boundary_penalty(observation: dict[str, np.ndarray]) -> float:
-    player_features = observation["player_features"]
-    if player_features.shape[0] >= 8:
-        left_margin = float(player_features[4])
-        right_margin = float(player_features[5])
-        top_margin = float(player_features[6])
-        bottom_margin = float(player_features[7])
-    else:
-        player_x = float(player_features[0])
-        player_y = float(player_features[1])
-        left_margin = player_x
-        right_margin = 1.0 - player_x
-        top_margin = player_y
-        bottom_margin = 1.0 - player_y
-
-    left = max(0.0, EDGE_MARGIN - left_margin) / EDGE_MARGIN
-    right = max(0.0, EDGE_MARGIN - right_margin) / EDGE_MARGIN
-    top = max(0.0, EDGE_MARGIN - top_margin) / EDGE_MARGIN
-    bottom = max(0.0, EDGE_MARGIN - bottom_margin) / EDGE_MARGIN
-    side_pressure = max(left, right)
-    vertical_pressure = max(top, bottom)
-    corner_pressure = min(side_pressure, vertical_pressure)
-    side_penalty = SIDE_EDGE_PENALTY_SCALE * side_pressure
-    vertical_penalty = VERTICAL_EDGE_PENALTY_SCALE * vertical_pressure
-    corner_penalty = CORNER_PENALTY_SCALE * corner_pressure
-    return side_penalty + vertical_penalty + corner_penalty
-
-
-# Compute a minimal baseline reward for one step.
-def compute_reward(
+# Reward a transition according to its change in danger potential.
+def danger_potential_shaping(
+    previous_observation: dict[str, np.ndarray],
     observation: dict[str, np.ndarray],
-    action: int,
-    previous_action: int,
-    collided: bool,
+    terminal: bool,
+    gamma: float,
 ) -> float:
-    survival_reward = 0.1
-    danger_penalty = near_danger_penalty(observation)
-    wall_penalty = boundary_penalty(observation)
-    collision_penalty = 50.0 if collided else 0.0
-    action_change_penalty = 0.005 if action != previous_action else 0.0
-    reversal_penalty = 0.02 if is_reversal(action, previous_action) else 0.0
-    return (
-        survival_reward
-        - danger_penalty
-        - wall_penalty
-        - collision_penalty
-        - action_change_penalty
-        - reversal_penalty
-    )
+    if not 0.0 <= gamma <= 1.0:
+        raise ValueError(f"Reward gamma must be in [0, 1], got {gamma}.")
+    previous_phi = danger_potential(previous_observation)
+    current_phi = 0.0 if terminal else danger_potential(observation)
+    return gamma * current_phi - previous_phi
+
+
+# Compute the base reward for one real game frame.
+def compute_frame_reward(action: int, previous_action: int, collided: bool) -> float:
+    collision_penalty = COLLISION_PENALTY if collided else 0.0
+    action_change_penalty = ACTION_CHANGE_PENALTY if action != previous_action else 0.0
+    return SURVIVAL_REWARD - collision_penalty - action_change_penalty # + danger_potential_shaping() / frames, (touhou_rl_env.py line189)

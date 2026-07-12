@@ -26,6 +26,7 @@ def print_action_probs(env: TouhouRLEnv, probs: np.ndarray) -> None:
 
 # Evaluate a saved CNN PPO model.
 def evaluate(args: argparse.Namespace) -> None:
+    config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
     env = TouhouRLEnv(
         render_mode="human" if args.render else None,
         max_steps=args.max_steps,
@@ -35,10 +36,10 @@ def evaluate(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
+        reward_gamma=config.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
-    config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
     validate_checkpoint_shapes(config, shapes, args.frame_stack, args.frame_stack_interval)
 
     agent = CNNPPOAgent(config)

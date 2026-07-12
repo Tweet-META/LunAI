@@ -25,15 +25,16 @@ def print_q_values(env: TouhouRLEnv, q_values: np.ndarray) -> None:
 
 # Evaluate a saved DQN model without exploration.
 def evaluate(args: argparse.Namespace) -> None:
+    config = load_dqn_config(str(Path(args.model_path)), device=args.device)
     env = TouhouRLEnv(
         render_mode="human" if args.render else None,
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
+        reward_gamma=config.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
-    config = load_dqn_config(str(Path(args.model_path)), device=args.device)
     if config.state_dim != state_dim:
         raise ValueError(f"Checkpoint state_dim={config.state_dim}, but environment state_dim={state_dim}.")
     agent = DQNAgent(config)

@@ -79,6 +79,7 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "player_start_margin": args.player_start_margin,
         "frame_stack": args.frame_stack,
         "frame_stack_interval": args.frame_stack_interval,
+        "reward_gamma": args.gamma,
         # "training_invincible": True,
     }
 
@@ -464,6 +465,7 @@ def train(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
+        reward_gamma=args.gamma,
         # training_invincible=True,
     )
     first_observation = env.reset(seed=args.seed)

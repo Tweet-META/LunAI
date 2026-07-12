@@ -268,6 +268,7 @@ def train(args: argparse.Namespace) -> None:
         level_file=args.level_file,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
+        reward_gamma=args.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)

@@ -57,6 +57,7 @@ def train(args: argparse.Namespace) -> None:
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
+        reward_gamma=args.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
