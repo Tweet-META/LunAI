@@ -1,13 +1,13 @@
 {
   "episodes": 1000000,
-  "max_steps": 1392,
+  "max_steps": 1000,
   "max_total_frame_steps": 100000,
   "max_total_decision_steps": 0,
   "num_envs": 1,
   "action_repeat": 3,
   "frame_stack": 2,
   "frame_stack_interval": 2,
-  "level_file": "level_1.json",
+  "level_file": "level_3.json",
   "random_player_start": true,
   "player_start_margin": 80.0,
   "seed": 0,
@@ -27,8 +27,8 @@
   "hidden_dim": 128,
   "save_interval": 5,
   "load_path": "",
-  "model_path": "checkpoints/lunai_v7_test1.pt",
-  "log_path": "training_logs/lunai_v7_test1.csv",
+  "model_path": "checkpoints/lunai_v7_test2.pt",
+  "log_path": "training_logs/lunai_v7_test2.csv",
   "device": "auto",
   "render": false
 }

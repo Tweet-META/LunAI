@@ -29,7 +29,7 @@ class ObservationConfig:
     playfield_height: int = 700
     blue_grid: tuple[int, int] = (6, 6)
     yellow_size: tuple[int, int] = (320, 320)
-    yellow_grid: tuple[int, int] = (8, 8)
+    yellow_grid: tuple[int, int] = (16, 16)
     red_size: tuple[int, int] = (128, 128)
     red_map: tuple[int, int] = (64, 64)
     max_speed: float = 500.0

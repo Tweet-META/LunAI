@@ -14,7 +14,7 @@ class CNNObservation(TypedDict):
 
 
 MAP_HISTORY_KEYS = {
-    "red": ("red_occupancy", "red_vx", "red_vy", "red_speed", "red_valid"),
+    "red": ("red_occupancy", "red_vx", "red_vy", "red_valid"),
     "yellow": ("yellow_density", "yellow_speed", "yellow_valid"),
     "blue": ("blue_density", "blue_speed"),
 }

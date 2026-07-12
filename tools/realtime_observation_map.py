@@ -136,7 +136,7 @@ def main() -> None:
             playfield_height=GAME_ZONE[3],
             blue_grid=(6, 6),
             yellow_size=(320, 320),
-            yellow_grid=(8, 8),
+            yellow_grid=(16, 16),
             red_size=(128, 128),
             red_map=(64, 64),
             max_speed=500.0,

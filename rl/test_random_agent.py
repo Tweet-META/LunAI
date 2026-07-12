@@ -34,9 +34,9 @@ def validate_observation(observation: dict[str, np.ndarray]) -> None:
     expected_shapes = {
         "blue_density": (6, 6),
         "blue_speed": (6, 6),
-        "yellow_density": (8, 8),
-        "yellow_speed": (8, 8),
-        "yellow_valid": (8, 8),
+        "yellow_density": (16, 16),
+        "yellow_speed": (16, 16),
+        "yellow_valid": (16, 16),
         "red_occupancy": (64, 64),
         "red_vx": (64, 64),
         "red_vy": (64, 64),

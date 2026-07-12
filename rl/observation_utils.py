@@ -12,7 +12,6 @@ OBSERVATION_KEYS = (
     "red_occupancy",
     "red_vx",
     "red_vy",
-    "red_speed",
     "red_valid",
     "player_features",
 )
