@@ -14,10 +14,14 @@ import pygame
 from rl.reward import (
     compute_frame_reward,
     danger_potential_shaping,
+    local_pccm_cost,
+    pccm_transition_shaping,
     upper_field_state_penalty,
+    wall_proximity,
     wall_proximity_shaping,
     wall_state_penalty,
 )
+from rl.cnn_observation_utils import cnn_map_keys
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -27,17 +31,6 @@ if str(PROJECT_DIR) not in sys.path:
 
 
 class TouhouRLEnv:
-    MAP_KEYS = (
-        "blue_density",
-        "blue_speed",
-        "yellow_density",
-        "yellow_speed",
-        "yellow_valid",
-        "red_occupancy",
-        "red_vx",
-        "red_vy",
-        "red_valid",
-    )
     ACTIONS = {
         0: "stay",
         1: "up",
@@ -70,6 +63,11 @@ class TouhouRLEnv:
         wall_state_penalty_weight: float = 0.0,
         upper_field_penalty_weight: float = 0.0,
         lower_field_threshold: float = 0.70,
+        observation_schema: str = "motion",
+        pccm_shaping_weight: float = 0.0,
+        pccm_prediction_frames: int = 5,
+        pccm_halo_width: float = 24.0,
+        pccm_wall_margin: float = 0.12,
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -110,6 +108,16 @@ class TouhouRLEnv:
             raise ValueError(f"lower_field_threshold must be in (0, 1], got {lower_field_threshold}.")
         self.upper_field_penalty_weight = float(upper_field_penalty_weight)
         self.lower_field_threshold = float(lower_field_threshold)
+        if observation_schema not in {"motion", "pccm"}:
+            raise ValueError(f"Unknown observation schema: {observation_schema}.")
+        if float(pccm_shaping_weight) < 0.0:
+            raise ValueError(f"PCCM shaping weight must be non-negative, got {pccm_shaping_weight}.")
+        self.observation_schema = observation_schema
+        self.MAP_KEYS = cnn_map_keys(observation_schema)
+        self.pccm_shaping_weight = float(pccm_shaping_weight)
+        self.pccm_prediction_frames = int(pccm_prediction_frames)
+        self.pccm_halo_width = float(pccm_halo_width)
+        self.pccm_wall_margin = float(pccm_wall_margin)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
 
@@ -132,6 +140,11 @@ class TouhouRLEnv:
                 red_size=(128, 128),
                 red_map=(64, 64),
                 max_speed=500.0,
+                observation_schema=self.observation_schema,
+                pccm_prediction_frames=self.pccm_prediction_frames,
+                pccm_halo_width=self.pccm_halo_width,
+                pccm_wall_margin=self.pccm_wall_margin,
+                pccm_debug=self.render_debug,
             )
         )
 
@@ -148,6 +161,12 @@ class TouhouRLEnv:
         self.last_reward = 0.0
         self.episode_reward = 0.0
         self.last_collided = False
+        self.last_pccm_cost = 0.0
+        self.last_pccm_shaping_reward = 0.0
+        self.episode_pccm_cost_sum = 0.0
+        self.episode_pccm_shaping_reward = 0.0
+        self.episode_wall_frames = 0
+        self.episode_action_counts = np.zeros(len(self.ACTIONS), dtype=np.int64)
 
         if self.render_mode == "human":
             self.screen = pygame.display.set_mode(SIZE, pygame.DOUBLEBUF, 16)
@@ -194,6 +213,12 @@ class TouhouRLEnv:
         self.last_reward = 0.0
         self.episode_reward = 0.0
         self.last_collided = False
+        self.last_pccm_cost = local_pccm_cost(self.last_observation)
+        self.last_pccm_shaping_reward = 0.0
+        self.episode_pccm_cost_sum = 0.0
+        self.episode_pccm_shaping_reward = 0.0
+        self.episode_wall_frames = 0
+        self.episode_action_counts.fill(0)
         return self.last_observation
 
     # Apply one action, advance one frame, and return the RL step data.
@@ -216,6 +241,9 @@ class TouhouRLEnv:
         previous_action_for_reward = self.previous_action
         self.previous_action = action
         self.steps += 1
+        self.episode_action_counts[action] += 1
+        previous_frame_observation = decision_start_observation
+        action_pccm_shaping_reward = 0.0
 
         for repeat_index in range(self.action_repeat):
             self.scene.player.slow = False
@@ -235,6 +263,14 @@ class TouhouRLEnv:
                 self.upper_field_penalty_weight,
                 self.lower_field_threshold,
             )
+            pccm_reward = pccm_transition_shaping(
+                previous_frame_observation,
+                observation,
+                collided,
+                self.pccm_shaping_weight,
+            )
+            frame_reward += pccm_reward
+            action_pccm_shaping_reward += pccm_reward
             if done or repeat_index == self.action_repeat - 1:
                 if self.danger_shaping_enabled:
                     frame_reward += danger_potential_shaping(
@@ -254,7 +290,13 @@ class TouhouRLEnv:
             self.last_reward = frame_reward
             self.episode_reward += frame_reward
             self.last_collided = collided
+            self.last_pccm_cost = local_pccm_cost(observation)
+            self.last_pccm_shaping_reward = pccm_reward
+            self.episode_pccm_cost_sum += self.last_pccm_cost
+            self.episode_pccm_shaping_reward += pccm_reward
+            self.episode_wall_frames += int(wall_proximity(observation) > 0.0)
             previous_action_for_reward = action
+            previous_frame_observation = observation
             if self.render_mode == "human":
                 self.render()
             if done:
@@ -271,6 +313,12 @@ class TouhouRLEnv:
             "bullets": len(self.scene.enemy_bullets) + len(self.scene.enemies),
             "action_repeat": self.action_repeat,
             "level_file": self.current_level_file,
+            "local_pccm_cost": self.last_pccm_cost,
+            "mean_local_pccm": self.episode_pccm_cost_sum / max(1, self.frame_steps),
+            "pccm_shaping_reward": action_pccm_shaping_reward,
+            "episode_pccm_shaping_reward": self.episode_pccm_shaping_reward,
+            "wall_time_ratio": self.episode_wall_frames / max(1, self.frame_steps),
+            "action_counts": self.episode_action_counts.tolist(),
         }
         self.last_hp = self.scene.player.hp
         self.last_observation = observation

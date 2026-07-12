@@ -81,14 +81,13 @@ def print_observation_summary(observation: dict[str, object], bullet_count: int)
     print(f"bullets: {bullet_count}")
     for key in (
         "blue_density",
-        "blue_speed",
+        "blue_pccm",
+        "blue_valid",
         "yellow_density",
-        "yellow_speed",
+        "yellow_pccm",
         "yellow_valid",
         "red_occupancy",
-        "red_vx",
-        "red_vy",
-        "red_speed",
+        "red_pccm",
         "red_valid",
         "player_features",
     ):
@@ -140,6 +139,8 @@ def main() -> None:
             red_size=(128, 128),
             red_map=(64, 64),
             max_speed=500.0,
+            observation_schema="pccm",
+            pccm_debug=True,
         )
     )
 

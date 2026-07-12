@@ -140,7 +140,21 @@ class GameScene(Scene):
                     sprite_sheet=SpriteSheet(path_join(*enemy_data["sprite"]["path"])).crop(enemy_data["sprite"]["size"]),
                     collider=Collider(enemy_data["collider"]["radius"], offset=Vector2(*enemy_data["collider"]["offset"])),
                     hp=enemy_data["hp"],
-                    attack_data=[(*attack[:3], (path_join(*attack[3][0]), attack[3][1], attack[3][2], attack[3][3], Vector2(*attack[3][4])), *attack[4:]) for attack in enemy_data["attacks"]],
+                    attack_data=[
+                        (
+                            *attack[:3],
+                            (
+                                path_join(*attack[3][0]),
+                                attack[3][1],
+                                attack[3][2],
+                                attack[3][3],
+                                Vector2(*attack[3][4]),
+                                *attack[3][5:],
+                            ),
+                            *attack[4:],
+                        )
+                        for attack in enemy_data["attacks"]
+                    ],
                     drop=(enemy_data["drop"]["list"], enemy_data["drop"]["list"]),
                     clear_bullets_on_death=enemy_data["clear_on_death"],
                     bullet_pool=self.enemy_bullets,
@@ -159,7 +173,8 @@ class GameScene(Scene):
                                 number_of_rings=ring_num,
                                 bullet_data=BulletData(
                                     SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4])
+                                    Collider(bul_data[3], bul_data[4]),
+                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
                                 ),
                                 speed=spd,
                                 start_time=s_time,
@@ -179,7 +194,8 @@ class GameScene(Scene):
                                 number_of_randoms=rand_num,
                                 bullet_data=BulletData(
                                     SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4])
+                                    Collider(bul_data[3], bul_data[4]),
+                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
                                 ),
                                 speed=spd,
                                 start_time=s_time,
@@ -196,7 +212,8 @@ class GameScene(Scene):
                                 number_of_cones=cone_num,
                                 bullet_data=BulletData(
                                     SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4])
+                                    Collider(bul_data[3], bul_data[4]),
+                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
                                 ),
                                 angle=angle,
                                 speed=spd,

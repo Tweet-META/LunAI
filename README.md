@@ -2,7 +2,7 @@
 
 LunAI is a reinforcement learning project for training bullet-hell game agents in a pygame-based Touhou-style environment.
 
-The current project focuses on building a usable RL environment, multi-scale bullet observations, reward functions, curriculum stages, and PPO baseline agents. The MLP PPO agent is kept as the baseline, while the CNN PPO agent is the next experimental training path.
+The current project focuses on a multi-scale, multi-frame CNN PPO agent. The MLP PPO agent is kept as a baseline, and the earlier DQN implementation remains under `rl/legacy_dqn/`.
 
 ## Project Scope
 
@@ -10,6 +10,8 @@ This repository includes:
 
 - a modified pygame Touhou-style game environment
 - blue/yellow/red multi-scale observation maps
+- Potential Collision Cost Maps (PCCM) with short-horizon bullet prediction
+- playable-area masks for player-centered local maps
 - RL environment wrappers
 - reward function design
 - MLP PPO baseline training scripts
@@ -26,7 +28,7 @@ MLP PPO baseline:
 python rl/train_ppo.py --episodes 300 --level-file level_1.json
 ```
 
-CNN PPO experiment:
+CNN PPO main training path:
 
 ```powershell
 python rl/train_ppo_cnn.py --config config.json
@@ -42,15 +44,31 @@ Each new PPO log begins with a `# run_config:` JSON line containing the final ef
 
 `global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. The CNN trainer currently contains an experimental invincible-contact mode: a bullet or enemy-body contact does not end the training episode, but receives the collision penalty on every contact frame. CNN evaluation remains lethal. This training-evaluation mismatch is recorded as a failed v6 experiment and is not the recommended main training route.
 
+### PCCM (Potential Collision Cost Map) Observation
+
+The current `pccm` observation schema keeps the three CNN map branches and gives every scale three channels per frame:
+
+- bullet occupancy or density
+- projected PCCM risk
+- playable-area mask
+
+PCCM uses each bullet's own position, hitbox, and velocity to estimate current soft danger and the next five game frames. Bullet buffers, predicted trajectories, and four wall costs use soft probabilistic composition capped below hard collision. Current collision regions are then restored to `1.0`.
+
+The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
+
+Old CNN checkpoints automatically use the legacy `motion` schema. New PCCM checkpoints store their observation schema, prediction horizon, halo width, and wall margin to prevent silent evaluation mismatches.
+
 ### Parallel Environment Sampling
 
-`--num-envs` defaults to `1`. The versioned `config.json` currently uses eight headless game environments on a CUDA-capable machine, while keeping one shared CNN PPO model in the main process:
+`--num-envs` defaults to `1`. It can use several headless game environments on a CUDA-capable machine while keeping one shared CNN PPO model in the main process:
 
 ```powershell
 python rl/train_ppo_cnn.py --config config.json
 ```
 
-The environment workers run pygame and observation building on CPU. The main process batches their observations for one GPU model, so workers do not create separate models or checkpoints. `rollout_steps` is the total PPO batch size and must be divisible by `num_envs`; the current `1024` gives eight environments `128` decisions each. Parallel training cannot use `--render`, and new CNN logs include an `env_id` column.
+The environment workers run pygame and observation building on CPU. The main process batches their observations for one GPU model, so workers do not create separate models or checkpoints. `rollout_steps` is the total PPO batch size and must be divisible by `num_envs`. Parallel training cannot use `--render`, and CNN logs include an `env_id` column.
+
+PCCM logs also record mean local risk, total PCCM shaping reward, wall-time ratio, and all nine episode action counts.
 
 ## Acknowledgements
 

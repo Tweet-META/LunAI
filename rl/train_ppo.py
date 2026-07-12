@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,7 @@ def write_log_header(
     path: Path,
     run_config: dict[str, object] | None = None,
     include_env_id: bool = False,
+    extra_columns: Sequence[str] = (),
 ) -> None:
     ensure_parent_dir(path)
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -50,6 +52,7 @@ def write_log_header(
             "hp",
             "collisions",
         ]
+        header.extend(extra_columns)
         if include_env_id:
             header.append("env_id")
         writer.writerow(header)

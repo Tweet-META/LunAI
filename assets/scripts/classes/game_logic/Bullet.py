@@ -15,6 +15,10 @@ class Bullet:
         sprite_sheet = []
         for i in range(len(self.sprite_sheet)):
             sprite = self.sprite_sheet[i]
+            if bullet_data.sprite_scale != 1.0:
+                width = max(1, round(sprite.get_width() * bullet_data.sprite_scale))
+                height = max(1, round(sprite.get_height() * bullet_data.sprite_scale))
+                sprite = pygame.transform.scale(sprite, (width, height))
             new_sprite = pygame.sprite.Sprite()
             new_sprite.image = pygame.transform.rotate(sprite, angle)
             new_sprite.rect = new_sprite.image.get_rect()

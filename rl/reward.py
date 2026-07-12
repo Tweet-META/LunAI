@@ -77,6 +77,41 @@ def danger_potential_shaping(
     return gamma * current_phi - previous_phi
 
 
+# Sample the red PCCM at the player's continuous map position.
+def local_pccm_cost(observation: dict[str, np.ndarray]) -> float:
+    pccm = observation.get("red_pccm")
+    if pccm is None:
+        return 0.0
+    x, y = player_red_map_position(observation)
+    rows, cols = pccm.shape
+    x0 = int(np.floor(x))
+    y0 = int(np.floor(y))
+    x1 = min(cols - 1, x0 + 1)
+    y1 = min(rows - 1, y0 + 1)
+    tx = x - x0
+    ty = y - y0
+    top = (1.0 - tx) * pccm[y0, x0] + tx * pccm[y0, x1]
+    bottom = (1.0 - tx) * pccm[y1, x0] + tx * pccm[y1, x1]
+    value = (1.0 - ty) * top + ty * bottom
+    return float(np.clip(value, 0.0, 1.0))
+
+
+# Reward transitions toward lower PCCM cost and skip collision frames.
+def pccm_transition_shaping(
+    previous_observation: dict[str, np.ndarray],
+    observation: dict[str, np.ndarray],
+    collided: bool,
+    weight: float,
+) -> float:
+    if weight < 0.0:
+        raise ValueError(f"PCCM shaping weight must be non-negative, got {weight}.")
+    if collided or weight == 0.0:
+        return 0.0
+    previous_cost = local_pccm_cost(previous_observation)
+    current_cost = local_pccm_cost(observation)
+    return float(weight) * (previous_cost - current_cost)
+
+
 # Measure linear proximity to the four playfield walls.
 def wall_proximity(observation: dict[str, np.ndarray], margin: float = WALL_PROXIMITY_MARGIN) -> float:
     if not 0.0 < margin <= 0.5:

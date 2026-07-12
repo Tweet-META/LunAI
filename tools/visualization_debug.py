@@ -137,9 +137,29 @@ def draw_player_hitbox_marker(screen: pygame.Surface, rect: pygame.Rect, observa
     pygame.draw.circle(screen, BLACK, (marker_x, marker_y), 6, 2)
 
 
-# Draw the six debug panels for density, speed, and red maps.
+# Draw six debug panels for the active observation schema.
 def draw_observation_panels(screen: pygame.Surface, observation: dict[str, np.ndarray], origin: tuple[int, int] = (690, 420)) -> None:
     x, y = origin
+    if "red_pccm" in observation:
+        panels = (
+            ("red_occupancy", (255, 70, 70)),
+            ("_red_pccm_bullet", (255, 180, 70)),
+            ("_red_pccm_prediction", (180, 90, 255)),
+            ("_red_pccm_wall", (80, 180, 255)),
+            ("red_pccm", (255, 70, 160)),
+            ("red_valid", (100, 220, 140)),
+        )
+        for index, (key, tint) in enumerate(panels):
+            row = index // 2
+            col = index % 2
+            rect = pygame.Rect(x + col * 140, y + row * 145, 120, 120)
+            values = observation.get(key, np.zeros_like(observation["red_pccm"]))
+            valid_mask = observation["red_valid"] if key != "red_valid" else None
+            draw_heatmap_panel(screen, values, rect, tint, valid_mask=valid_mask)
+            if key in {"red_occupancy", "red_pccm"}:
+                draw_player_hitbox_marker(screen, rect, observation)
+        return
+
     draw_heatmap_panel(screen, observation["blue_density"], pygame.Rect(x, y, 120, 120), (70, 130, 255))
     draw_heatmap_panel(screen, observation["blue_speed"], pygame.Rect(x + 140, y, 120, 120), (80, 210, 255))
     draw_heatmap_panel(screen, observation["yellow_density"], pygame.Rect(x, y + 145, 120, 120), (255, 220, 70), valid_mask=observation["yellow_valid"])
@@ -156,15 +176,29 @@ def draw_observation_panels(screen: pygame.Surface, observation: dict[str, np.nd
 def save_debug_image(path: str, observation: dict[str, np.ndarray]) -> None:
     import matplotlib.pyplot as plt
 
-    panels = [
-        ("blue_density", observation["blue_density"]),
-        ("blue_speed", observation["blue_speed"]),
-        ("yellow_density", observation["yellow_density"]),
-        ("yellow_speed", observation["yellow_speed"]),
-        ("red_occupancy", observation["red_occupancy"]),
-        ("red_speed", observation["red_speed"]),
-    ]
-    fig, axes = plt.subplots(2, 3, figsize=(9, 6))
+    if "red_pccm" in observation:
+        panels = [
+            ("blue_pccm", observation["blue_pccm"]),
+            ("yellow_pccm", observation["yellow_pccm"]),
+            ("red_occupancy", observation["red_occupancy"]),
+            ("bullet_buffer", observation.get("_red_pccm_bullet", np.zeros_like(observation["red_pccm"]))),
+            ("prediction", observation.get("_red_pccm_prediction", np.zeros_like(observation["red_pccm"]))),
+            ("wall", observation.get("_red_pccm_wall", np.zeros_like(observation["red_pccm"]))),
+            ("red_pccm", observation["red_pccm"]),
+            ("red_playable_mask", observation["red_valid"]),
+            ("yellow_playable_mask", observation["yellow_valid"]),
+        ]
+        fig, axes = plt.subplots(3, 3, figsize=(9, 9))
+    else:
+        panels = [
+            ("blue_density", observation["blue_density"]),
+            ("blue_speed", observation["blue_speed"]),
+            ("yellow_density", observation["yellow_density"]),
+            ("yellow_speed", observation["yellow_speed"]),
+            ("red_occupancy", observation["red_occupancy"]),
+            ("red_speed", observation["red_speed"]),
+        ]
+        fig, axes = plt.subplots(2, 3, figsize=(9, 6))
     for ax, (title, values) in zip(axes.flat, panels):
         ax.imshow(values, vmin=0.0, vmax=1.0, interpolation="nearest")
         ax.set_title(title)

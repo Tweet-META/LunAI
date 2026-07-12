@@ -14,20 +14,41 @@ class CNNObservation(TypedDict):
 
 
 MAP_HISTORY_KEYS = {
-    "red": ("red_occupancy", "red_vx", "red_vy", "red_valid"),
-    "yellow": ("yellow_density", "yellow_speed", "yellow_valid"),
-    "blue": ("blue_density", "blue_speed"),
+    "motion": {
+        "red": ("red_occupancy", "red_vx", "red_vy", "red_valid"),
+        "yellow": ("yellow_density", "yellow_speed", "yellow_valid"),
+        "blue": ("blue_density", "blue_speed"),
+    },
+    "pccm": {
+        "red": ("red_occupancy", "red_pccm", "red_valid"),
+        "yellow": ("yellow_density", "yellow_pccm", "yellow_valid"),
+        "blue": ("blue_density", "blue_pccm", "blue_valid"),
+    },
 }
+
+
+# Return the map keys stored in frame history for one observation schema.
+def cnn_map_keys(observation_schema: str) -> tuple[str, ...]:
+    if observation_schema not in MAP_HISTORY_KEYS:
+        raise ValueError(f"Unknown observation schema: {observation_schema}.")
+    return tuple(
+        key
+        for map_name in ("blue", "yellow", "red")
+        for key in MAP_HISTORY_KEYS[observation_schema][map_name]
+    )
 
 
 # Stack one map type from oldest frame to current frame along its channel axis.
 def stack_map_history(
     map_history: Sequence[dict[str, np.ndarray]],
     map_name: str,
+    observation_schema: str,
 ) -> np.ndarray:
     if not map_history:
         raise ValueError("Map history cannot be empty.")
-    keys = MAP_HISTORY_KEYS[map_name]
+    if observation_schema not in MAP_HISTORY_KEYS:
+        raise ValueError(f"Unknown observation schema: {observation_schema}.")
+    keys = MAP_HISTORY_KEYS[observation_schema][map_name]
     layers = [
         np.asarray(frame[key], dtype=np.float32)
         for frame in map_history
@@ -40,13 +61,14 @@ def stack_map_history(
 def cnn_observation(
     observation: dict[str, np.ndarray],
     map_history: Sequence[dict[str, np.ndarray]] | None = None,
+    observation_schema: str = "motion",
 ) -> CNNObservation:
     if map_history is None:
         map_history = (observation,)
 
-    red = stack_map_history(map_history, "red")
-    yellow = stack_map_history(map_history, "yellow")
-    blue = stack_map_history(map_history, "blue")
+    red = stack_map_history(map_history, "red", observation_schema)
+    yellow = stack_map_history(map_history, "yellow", observation_schema)
+    blue = stack_map_history(map_history, "blue", observation_schema)
     player = np.asarray(observation["player_features"], dtype=np.float32)
     state: CNNObservation = {
         "red": red,
@@ -76,8 +98,9 @@ def stack_cnn_observations(states: list[CNNObservation]) -> CNNObservation:
 def cnn_observation_shapes(
     observation: dict[str, np.ndarray],
     map_history: Sequence[dict[str, np.ndarray]] | None = None,
+    observation_schema: str = "motion",
 ) -> dict[str, tuple[int, ...]]:
-    state = cnn_observation(observation, map_history)
+    state = cnn_observation(observation, map_history, observation_schema)
     return {key: tuple(value.shape) for key, value in state.items()}
 
 

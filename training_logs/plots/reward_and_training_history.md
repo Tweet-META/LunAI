@@ -973,3 +973,71 @@ valid mask 修复了贴边时局部地图坐标含义变化的问题
 说明角落策略不只来自输入歧义
 本轮日志仍未达到原定训练预算，暂时不能作为最终实验结果
 ```
+
+## 2026-07-12：lunai_v7_diagnose5
+
+改动：
+```text
+action_repeat=1
+ACTION_CHANGE_PENALTY=0
+固定玩家出生位置
+训练关卡随机选择空场和左、中、右三种大狙
+敌人出现时间在 0～2.5 秒内随机
+加入较弱的持续贴墙惩罚和上半场惩罚
+大狙贴图放大到约 48x48，碰撞半径从 10 增加到 20
+frame_stack=2
+frame_stack_interval=2
+```
+
+训练结果：
+```text
+total_frame_steps=99,962
+episodes=222
+前 50 局 mean_frame=426.6，满 500 帧 27/50
+后 50 局 mean_frame=464.9，满 500 帧 43/50
+后 20 局 mean_frame=456.6，满 500 帧 17/20
+最终 entropy=1.665668
+```
+
+greedy 验收：
+```text
+左侧大狙：10/10 存活 500 帧
+中间大狙：10/10 存活 500 帧
+右侧大狙：10/10 存活 500 帧
+三组贴墙比例均为 0
+三组向下动作比例均为 0
+策略通常等待子弹接近，再向左移动约 6～8 帧并重新停下
+```
+
+结论：
+```text
+首次明确验证“多帧 occupancy -> CNN 识别来弹 -> PPO 短移避弹 -> 停下”的完整链路
+策略仍有固定向左的动作偏好，对小狙的泛化不足
+该 checkpoint 保留为 PCCM 前的 motion-schema 基线
+```
+
+## 2026-07-13：多尺度 PCCM 主线实现
+
+改动：
+```text
+新增 observation_schema=pccm，同时保留旧 motion schema 的 checkpoint 兼容
+红、黄、蓝三个 CNN 分支统一使用 occupancy/density、PCCM、playable_mask
+两帧时三个分支均为 6 通道，总地图通道数仍为 18
+速度不再直接输入 CNN，但每颗子弹的 vx/vy 继续用于 PCCM 预测
+PCCM 预测未来 5 帧，halo_width=24，wall_margin=0.12
+软风险使用 1-(1-old)*(1-new) 合并并限制到 0.8
+真实碰撞区域考虑 bullet.radius+player.radius，最终覆盖为 1.0
+新增 PCCM transition shaping，weight=0.05，碰撞帧不计算差值
+训练日志新增平均局部 PCCM、PCCM shaping、贴墙比例和 9 个动作计数
+调试图分开展示 occupancy、当前缓冲、未来预测、墙壁、最终 PCCM 和 playable mask
+```
+
+性能与验证：
+```text
+红区硬 occupancy 保持 64x64
+平滑 PCCM 内部采样：红 32x32 后双线性放大，黄 32x32 -> 16x16，蓝 12x12 -> 6x6
+level_6、最多 86 个危险体时，本机 PCCM 环境约 65.3 FPS
+旧 motion 环境和 lunai_v7_diagnose5 checkpoint 仍可正常加载
+单环境和双环境 PPO smoke training 均通过
+该条目仅记录实现完成，尚不是正式训练结果
+```

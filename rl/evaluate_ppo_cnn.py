@@ -44,11 +44,25 @@ def evaluate(args: argparse.Namespace) -> None:
         wall_state_penalty_weight=args.wall_state_penalty_weight,
         upper_field_penalty_weight=args.upper_field_penalty_weight,
         lower_field_threshold=args.lower_field_threshold,
+        observation_schema=config.observation_schema,
+        pccm_shaping_weight=args.pccm_shaping_weight,
+        pccm_prediction_frames=config.pccm_prediction_frames,
+        pccm_halo_width=config.pccm_halo_width,
+        pccm_wall_margin=config.pccm_wall_margin,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
-    shapes = cnn_observation_shapes(first_observation, env.get_map_history())
-    validate_checkpoint_shapes(config, shapes, args.frame_stack, args.frame_stack_interval)
+    shapes = cnn_observation_shapes(first_observation, env.get_map_history(), config.observation_schema)
+    validate_checkpoint_shapes(
+        config,
+        shapes,
+        args.frame_stack,
+        args.frame_stack_interval,
+        config.observation_schema,
+        config.pccm_prediction_frames,
+        config.pccm_halo_width,
+        config.pccm_wall_margin,
+    )
 
     agent = CNNPPOAgent(config)
     agent.load(str(Path(args.model_path)))
@@ -60,7 +74,7 @@ def evaluate(args: argparse.Namespace) -> None:
     try:
         for episode in range(1, args.episodes + 1):
             observation = env.reset(seed=args.seed + episode)
-            state = cnn_observation(observation, env.get_map_history())
+            state = cnn_observation(observation, env.get_map_history(), config.observation_schema)
             if args.print_action_probs:
                 print_action_probs(env, agent.action_probs(state))
 
@@ -77,7 +91,7 @@ def evaluate(args: argparse.Namespace) -> None:
                     action = agent.select_greedy_action(state)
                 action_counts[action] += 1
                 observation, reward, done, info = env.step(action)
-                state = cnn_observation(observation, env.get_map_history())
+                state = cnn_observation(observation, env.get_map_history(), config.observation_schema)
                 total_reward += reward
                 total_collisions += int(info.get("collided", False))
                 last_info = info
@@ -128,6 +142,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
     parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
     parser.add_argument("--lower-field-threshold", type=float, default=0.70)
+    parser.add_argument("--pccm-shaping-weight", type=float, default=0.05)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--print-actions", action="store_true")
     parser.add_argument("--print-action-probs", action="store_true")
