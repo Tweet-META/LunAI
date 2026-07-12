@@ -64,12 +64,16 @@ def create_environment(
         max_steps=args.max_steps,
         action_repeat=1,
         level_file=level_file,
+        level_spawn_time_jitter=args.level_spawn_time_jitter,
         random_player_start=False,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
         reward_gamma=reward_gamma,
         danger_shaping_enabled=False,
         wall_shaping_weight=args.wall_shaping_weight,
+        wall_state_penalty_weight=args.wall_state_penalty_weight,
+        upper_field_penalty_weight=args.upper_field_penalty_weight,
+        lower_field_threshold=args.lower_field_threshold,
     )
 
 
@@ -231,7 +235,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=2)
     parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=2)
     parser.add_argument("--level-file", type=str, default="level_diagnostic_aimed.json")
+    parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
     parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
+    parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
+    parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
+    parser.add_argument("--lower-field-threshold", type=float, default=0.70)
     parser.add_argument("--seed", type=int, default=2000)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--stochastic", action="store_true")

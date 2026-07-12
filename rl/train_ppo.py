@@ -266,11 +266,16 @@ def train(args: argparse.Namespace) -> None:
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
+        level_files=args.level_files,
+        level_spawn_time_jitter=args.level_spawn_time_jitter,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
         reward_gamma=args.gamma,
         danger_shaping_enabled=args.danger_shaping_enabled,
         wall_shaping_weight=args.wall_shaping_weight,
+        wall_state_penalty_weight=args.wall_state_penalty_weight,
+        upper_field_penalty_weight=args.upper_field_penalty_weight,
+        lower_field_threshold=args.lower_field_threshold,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -385,6 +390,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-total-decision-steps", type=int, default=0)
     parser.add_argument("--action-repeat", type=int, default=3)
     parser.add_argument("--level-file", type=str, default="level_1.json")
+    parser.add_argument("--level-files", nargs="*", default=[])
+    parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
     parser.add_argument("--random-player-start", action="store_true")
     parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=0)
@@ -394,6 +401,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--danger-shaping", action=argparse.BooleanOptionalAction, default=True, dest="danger_shaping_enabled")
     parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
+    parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
+    parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
+    parser.add_argument("--lower-field-threshold", type=float, default=0.70)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--learning-rate-final", type=float, default=-1.0)

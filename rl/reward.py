@@ -8,6 +8,7 @@ COLLISION_PENALTY = 30.0
 ACTION_CHANGE_PENALTY = 0.0
 DANGER_POTENTIAL_BETA = 0.2
 WALL_PROXIMITY_MARGIN = 0.12
+LOWER_FIELD_THRESHOLD = 0.70
 
 
 # Convert the normalized player position into red-map cell coordinates.
@@ -98,6 +99,35 @@ def wall_proximity_shaping(
     previous_proximity = wall_proximity(previous_observation)
     current_proximity = wall_proximity(observation)
     return float(weight) * (previous_proximity - current_proximity)
+
+
+# Penalize every frame spent close to a wall.
+def wall_state_penalty(observation: dict[str, np.ndarray], weight: float) -> float:
+    if weight < 0.0:
+        raise ValueError(f"Wall state penalty weight must be non-negative, got {weight}.")
+    return float(weight) * wall_proximity(observation)
+
+
+# Measure how far the player has moved above the preferred lower field.
+def upper_field_proximity(
+    observation: dict[str, np.ndarray],
+    threshold: float = LOWER_FIELD_THRESHOLD,
+) -> float:
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError(f"Lower field threshold must be in (0, 1], got {threshold}.")
+    player_y = float(np.clip(observation["player_features"][1], 0.0, 1.0))
+    return max(0.0, (threshold - player_y) / threshold)
+
+
+# Penalize every frame spent above the preferred lower field.
+def upper_field_state_penalty(
+    observation: dict[str, np.ndarray],
+    weight: float,
+    threshold: float = LOWER_FIELD_THRESHOLD,
+) -> float:
+    if weight < 0.0:
+        raise ValueError(f"Upper field penalty weight must be non-negative, got {weight}.")
+    return float(weight) * upper_field_proximity(observation, threshold)
 
 
 # Compute the base reward for one real game frame.

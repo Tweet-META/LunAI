@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 import sys
+from collections.abc import Sequence
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,13 @@ from typing import Any
 import numpy as np
 import pygame
 
-from rl.reward import compute_frame_reward, danger_potential_shaping, wall_proximity_shaping
+from rl.reward import (
+    compute_frame_reward,
+    danger_potential_shaping,
+    upper_field_state_penalty,
+    wall_proximity_shaping,
+    wall_state_penalty,
+)
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +57,8 @@ class TouhouRLEnv:
         max_steps: int | None = None,
         action_repeat: int = 3,
         level_file: str = "level_1.json",
+        level_files: Sequence[str] | None = None,
+        level_spawn_time_jitter: float = 0.0,
         random_player_start: bool = False,
         player_start_margin: float = 80.0,
         frame_stack: int = 1,
@@ -58,6 +67,9 @@ class TouhouRLEnv:
         reward_gamma: float = 0.99,
         danger_shaping_enabled: bool = True,
         wall_shaping_weight: float = 0.01,
+        wall_state_penalty_weight: float = 0.0,
+        upper_field_penalty_weight: float = 0.0,
+        lower_field_threshold: float = 0.70,
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -67,7 +79,15 @@ class TouhouRLEnv:
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.action_repeat = max(1, int(action_repeat))
+        configured_levels = tuple(str(path) for path in (level_files or (level_file,)))
+        if not configured_levels or any(not path for path in configured_levels):
+            raise ValueError("At least one non-empty level file is required.")
+        if float(level_spawn_time_jitter) < 0.0:
+            raise ValueError(f"level_spawn_time_jitter must be non-negative, got {level_spawn_time_jitter}.")
         self.level_file = level_file
+        self.level_files = configured_levels
+        self.level_spawn_time_jitter = float(level_spawn_time_jitter)
+        self.current_level_file = configured_levels[0]
         self.random_player_start = random_player_start
         self.player_start_margin = float(player_start_margin)
         self.frame_stack = int(frame_stack)
@@ -81,6 +101,15 @@ class TouhouRLEnv:
         if float(wall_shaping_weight) < 0.0:
             raise ValueError(f"wall_shaping_weight must be non-negative, got {wall_shaping_weight}.")
         self.wall_shaping_weight = float(wall_shaping_weight)
+        if float(wall_state_penalty_weight) < 0.0:
+            raise ValueError(f"wall_state_penalty_weight must be non-negative, got {wall_state_penalty_weight}.")
+        self.wall_state_penalty_weight = float(wall_state_penalty_weight)
+        if float(upper_field_penalty_weight) < 0.0:
+            raise ValueError(f"upper_field_penalty_weight must be non-negative, got {upper_field_penalty_weight}.")
+        if not 0.0 < float(lower_field_threshold) <= 1.0:
+            raise ValueError(f"lower_field_threshold must be in (0, 1], got {lower_field_threshold}.")
+        self.upper_field_penalty_weight = float(upper_field_penalty_weight)
+        self.lower_field_threshold = float(lower_field_threshold)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
 
@@ -146,7 +175,12 @@ class TouhouRLEnv:
 
         from assets.scripts.scenes.GameScene import GameScene
 
-        self.scene = GameScene(level_file=self.level_file)
+        self.current_level_file = random.choice(self.level_files)
+        self.scene = GameScene(level_file=self.current_level_file)
+        if self.level_spawn_time_jitter > 0.0:
+            for enemy_data in self.scene.level_enemies:
+                enemy_data["time"] = float(enemy_data["time"]) + random.uniform(0.0, self.level_spawn_time_jitter)
+            self.scene.level_enemies.sort(key=lambda enemy: enemy["time"])
         self.scene.player.training_invincible = self.training_invincible
         if self.random_player_start:
             self._randomize_player_start()
@@ -195,6 +229,12 @@ class TouhouRLEnv:
             contact_frames += int(collided)
             done = self._is_done(collided)
             frame_reward = compute_frame_reward(action, previous_action_for_reward, collided)
+            frame_reward -= wall_state_penalty(observation, self.wall_state_penalty_weight)
+            frame_reward -= upper_field_state_penalty(
+                observation,
+                self.upper_field_penalty_weight,
+                self.lower_field_threshold,
+            )
             if done or repeat_index == self.action_repeat - 1:
                 if self.danger_shaping_enabled:
                     frame_reward += danger_potential_shaping(
@@ -230,6 +270,7 @@ class TouhouRLEnv:
             "frame_steps": self.frame_steps,
             "bullets": len(self.scene.enemy_bullets) + len(self.scene.enemies),
             "action_repeat": self.action_repeat,
+            "level_file": self.current_level_file,
         }
         self.last_hp = self.scene.player.hp
         self.last_observation = observation
