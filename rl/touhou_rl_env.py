@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pygame
 
-from rl.reward import compute_frame_reward, danger_potential_shaping
+from rl.reward import compute_frame_reward, danger_potential_shaping, wall_proximity_shaping
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -56,6 +56,9 @@ class TouhouRLEnv:
         frame_stack_interval: int = 1,
         training_invincible: bool = False,
         reward_gamma: float = 0.99,
+        danger_shaping_enabled: bool = True,
+        wall_shaping_weight: float = 0.01,
+        render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
             raise ValueError(f"frame_stack must be in 1..5, got {frame_stack}.")
@@ -74,6 +77,11 @@ class TouhouRLEnv:
         if not 0.0 <= float(reward_gamma) <= 1.0:
             raise ValueError(f"reward_gamma must be in [0, 1], got {reward_gamma}.")
         self.reward_gamma = float(reward_gamma)
+        self.danger_shaping_enabled = bool(danger_shaping_enabled)
+        if float(wall_shaping_weight) < 0.0:
+            raise ValueError(f"wall_shaping_weight must be non-negative, got {wall_shaping_weight}.")
+        self.wall_shaping_weight = float(wall_shaping_weight)
+        self.render_debug = bool(render_debug)
         self._configure_pygame()
 
         from assets.scripts.math_and_data.enviroment import FPS, GAME_ZONE, SIZE, db_module
@@ -188,11 +196,17 @@ class TouhouRLEnv:
             done = self._is_done(collided)
             frame_reward = compute_frame_reward(action, previous_action_for_reward, collided)
             if done or repeat_index == self.action_repeat - 1:
-                frame_reward += danger_potential_shaping(
+                if self.danger_shaping_enabled:
+                    frame_reward += danger_potential_shaping(
+                        decision_start_observation,
+                        observation,
+                        done,
+                        self.reward_gamma,
+                    )
+                frame_reward += wall_proximity_shaping(
                     decision_start_observation,
                     observation,
-                    done,
-                    self.reward_gamma,
+                    self.wall_shaping_weight,
                 )
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp
@@ -259,19 +273,19 @@ class TouhouRLEnv:
         }
         self.map_history.append(snapshot)
 
-    # Render the game and debug observation panels in human mode.
+    # Render the game and optional observation panels in human mode.
     def render(self) -> None:
         if self.render_mode != "human":
             return
-        from tools.visualization_debug import draw_observation_panels, draw_realtime_overlay
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.close()
                 return
 
         self.scene.render(self.screen, self.clock)
-        if self.last_observation is not None:
+        if self.render_debug and self.last_observation is not None:
+            from tools.visualization_debug import draw_observation_panels, draw_realtime_overlay
+
             draw_realtime_overlay(self.screen, self.last_observation, (self.GAME_ZONE[0], self.GAME_ZONE[1]), show_grids=True)
             draw_observation_panels(self.screen, self.last_observation)
         self._draw_reward_panel()

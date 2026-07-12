@@ -262,13 +262,16 @@ def train(args: argparse.Namespace) -> None:
     torch.manual_seed(args.seed)
 
     env = TouhouRLEnv(
-        render_mode="human" if args.render else None,
+        render_mode="human" if args.render or args.render_debug else None,
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
         reward_gamma=args.gamma,
+        danger_shaping_enabled=args.danger_shaping_enabled,
+        wall_shaping_weight=args.wall_shaping_weight,
+        render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)
@@ -389,6 +392,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--minibatch-size", type=int, default=256)
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--danger-shaping", action=argparse.BooleanOptionalAction, default=True, dest="danger_shaping_enabled")
+    parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--learning-rate-final", type=float, default=-1.0)
@@ -406,6 +411,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-path", type=str, default="training_logs/ppo_log.csv")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--render-debug", action="store_true")
     return parser
 
 

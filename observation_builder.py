@@ -79,27 +79,27 @@ def density_grid(integral: np.ndarray, window: tuple[int, int, int, int], grid_s
     rows, cols = grid_shape
     field_h = integral.shape[0] - 1
     field_w = integral.shape[1] - 1
-    out = np.zeros((rows, cols), dtype=np.float32)
     xs = np.linspace(x1, x2, cols + 1).round().astype(int)
     ys = np.linspace(y1, y2, rows + 1).round().astype(int)
-
-    for row in range(rows):
-        for col in range(cols):
-            cx1, cx2 = xs[col], xs[col + 1]
-            cy1, cy2 = ys[row], ys[row + 1]
-            clipped_x1 = max(0, min(field_w, cx1))
-            clipped_x2 = max(0, min(field_w, cx2))
-            clipped_y1 = max(0, min(field_h, cy1))
-            clipped_y2 = max(0, min(field_h, cy2))
-            area = (clipped_x2 - clipped_x1) * (clipped_y2 - clipped_y1)
-            if area > 0:
-                out[row, col] = rectangle_sum(
-                    integral,
-                    clipped_x1,
-                    clipped_y1,
-                    clipped_x2,
-                    clipped_y2,
-                ) / area
+    clipped_xs = np.clip(xs, 0, field_w)
+    clipped_ys = np.clip(ys, 0, field_h)
+    cell_x1 = clipped_xs[:-1][None, :]
+    cell_x2 = clipped_xs[1:][None, :]
+    cell_y1 = clipped_ys[:-1][:, None]
+    cell_y2 = clipped_ys[1:][:, None]
+    occupied = (
+        integral[cell_y2, cell_x2]
+        - integral[cell_y1, cell_x2]
+        - integral[cell_y2, cell_x1]
+        + integral[cell_y1, cell_x1]
+    )
+    area = (cell_x2 - cell_x1) * (cell_y2 - cell_y1)
+    out = np.divide(
+        occupied,
+        area,
+        out=np.zeros((rows, cols), dtype=np.float32),
+        where=area > 0,
+    )
     return np.clip(out, 0.0, 1.0)
 
 
@@ -112,23 +112,17 @@ def valid_area_grid(
 ) -> np.ndarray:
     x1, y1, x2, y2 = window
     rows, cols = grid_shape
-    valid = np.zeros((rows, cols), dtype=np.float32)
     xs = np.linspace(x1, x2, cols + 1).round().astype(int)
     ys = np.linspace(y1, y2, rows + 1).round().astype(int)
-
-    for row in range(rows):
-        for col in range(cols):
-            cell_x1, cell_x2 = xs[col], xs[col + 1]
-            cell_y1, cell_y2 = ys[row], ys[row + 1]
-            cell_area = max(1, (cell_x2 - cell_x1) * (cell_y2 - cell_y1))
-            clipped_x1 = max(0, min(field_w, cell_x1))
-            clipped_x2 = max(0, min(field_w, cell_x2))
-            clipped_y1 = max(0, min(field_h, cell_y1))
-            clipped_y2 = max(0, min(field_h, cell_y2))
-            playable_area = max(0, clipped_x2 - clipped_x1) * max(0, clipped_y2 - clipped_y1)
-            valid[row, col] = playable_area / cell_area
-
-    return valid
+    cell_widths = np.diff(xs)
+    cell_heights = np.diff(ys)
+    cell_area = np.maximum(1, np.outer(cell_heights, cell_widths))
+    clipped_xs = np.clip(xs, 0, field_w)
+    clipped_ys = np.clip(ys, 0, field_h)
+    playable_widths = np.maximum(0, np.diff(clipped_xs))
+    playable_heights = np.maximum(0, np.diff(clipped_ys))
+    playable_area = np.outer(playable_heights, playable_widths)
+    return (playable_area / cell_area).astype(np.float32)
 
 
 def average_speed_grid(

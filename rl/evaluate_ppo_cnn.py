@@ -28,7 +28,7 @@ def print_action_probs(env: TouhouRLEnv, probs: np.ndarray) -> None:
 def evaluate(args: argparse.Namespace) -> None:
     config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
     env = TouhouRLEnv(
-        render_mode="human" if args.render else None,
+        render_mode="human" if args.render or args.render_debug else None,
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
@@ -37,6 +37,9 @@ def evaluate(args: argparse.Namespace) -> None:
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
         reward_gamma=config.gamma,
+        danger_shaping_enabled=args.danger_shaping_enabled,
+        wall_shaping_weight=args.wall_shaping_weight,
+        render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
@@ -113,10 +116,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--danger-shaping", action=argparse.BooleanOptionalAction, default=True, dest="danger_shaping_enabled")
+    parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--print-actions", action="store_true")
     parser.add_argument("--print-action-probs", action="store_true")
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--render-debug", action="store_true")
     return parser
 
 

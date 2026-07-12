@@ -4,9 +4,10 @@ import numpy as np
 
 
 SURVIVAL_REWARD = 0.1
-COLLISION_PENALTY = 50.0
-ACTION_CHANGE_PENALTY = 0.005
-DANGER_POTENTIAL_BETA = 0.1
+COLLISION_PENALTY = 30.0
+ACTION_CHANGE_PENALTY = 0.0
+DANGER_POTENTIAL_BETA = 0.2
+WALL_PROXIMITY_MARGIN = 0.12
 
 
 # Convert the normalized player position into red-map cell coordinates.
@@ -75,8 +76,32 @@ def danger_potential_shaping(
     return gamma * current_phi - previous_phi
 
 
+# Measure linear proximity to the four playfield walls.
+def wall_proximity(observation: dict[str, np.ndarray], margin: float = WALL_PROXIMITY_MARGIN) -> float:
+    if not 0.0 < margin <= 0.5:
+        raise ValueError(f"Wall margin must be in (0, 0.5], got {margin}.")
+    player_x = float(np.clip(observation["player_features"][0], 0.0, 1.0))
+    player_y = float(np.clip(observation["player_features"][1], 0.0, 1.0))
+    horizontal = max(0.0, 1.0 - min(player_x, 1.0 - player_x) / margin)
+    vertical = max(0.0, 1.0 - min(player_y, 1.0 - player_y) / margin)
+    return horizontal + vertical
+
+
+# Reward movement away from nearby walls without penalizing parallel movement.
+def wall_proximity_shaping(
+    previous_observation: dict[str, np.ndarray],
+    observation: dict[str, np.ndarray],
+    weight: float,
+) -> float:
+    if weight < 0.0:
+        raise ValueError(f"Wall shaping weight must be non-negative, got {weight}.")
+    previous_proximity = wall_proximity(previous_observation)
+    current_proximity = wall_proximity(observation)
+    return float(weight) * (previous_proximity - current_proximity)
+
+
 # Compute the base reward for one real game frame.
 def compute_frame_reward(action: int, previous_action: int, collided: bool) -> float:
     collision_penalty = COLLISION_PENALTY if collided else 0.0
     action_change_penalty = ACTION_CHANGE_PENALTY if action != previous_action else 0.0
-    return SURVIVAL_REWARD - collision_penalty - action_change_penalty # + danger_potential_shaping() / frames, (touhou_rl_env.py line189)
+    return SURVIVAL_REWARD - collision_penalty - action_change_penalty

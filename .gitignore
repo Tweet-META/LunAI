@@ -8,6 +8,7 @@ __pycache__/
 checkpoints/
 training_logs/*
 failed_runs/
+diagnostics/
 plots/
 !training_logs/plots/
 training_logs/plots/*
