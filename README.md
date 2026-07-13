@@ -54,7 +54,9 @@ The current `pccm` observation schema keeps the three CNN map branches and gives
 
 PCCM uses each bullet's own position, hitbox, and velocity to estimate current soft danger and the next five game frames. Bullet buffers, predicted trajectories, and four wall costs use soft probabilistic composition capped below hard collision. Current collision regions are then restored to `1.0`.
 
-The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
+The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. The full-grid NumPy implementation remains the training default. An exact floating-point ROI implementation and an experimental `auto` hybrid are retained for profiling, but real-level benchmarks did not show an end-to-end observation-building speedup. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
+
+Run `python tools/benchmark_pccm_roi.py` to compare the reference, pure ROI, and `auto` implementations at 80, 200, and 500 synthetic bullets. The command also checks maximum and mean absolute error and requires zero hard-collision mismatches. Run `python tools/benchmark_pccm_level.py` for a complete observation-building comparison on the dedicated 500-bullet pygame level.
 
 Old CNN checkpoints automatically use the legacy `motion` schema. New PCCM checkpoints store their observation schema, prediction horizon, halo width, and wall margin to prevent silent evaluation mismatches.
 

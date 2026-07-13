@@ -1037,6 +1037,14 @@ PCCM 预测未来 5 帧，halo_width=24，wall_margin=0.12
 红区硬 occupancy 保持 64x64
 平滑 PCCM 内部采样：红 32x32 后双线性放大，黄 32x32 -> 16x16，蓝 12x12 -> 6x6
 level_6、最多 86 个危险体时，本机 PCCM 环境约 65.3 FPS
+保留全采样 NumPy broadcasting 作为 reference，新增精确浮点 ROI 实现
+纯 PCCM 微基准中蓝区 12x12 使用 reference 更快，黄区和红区 32x32 使用 ROI 更快
+500 弹、7 次中位数基准中 reference 三尺度总耗时约 23.82 ms，auto 约 18.38 ms
+随机玩家一致性测试中 max_abs_error=2.38e-7，mean_abs_error=5.30e-9，hard_collision_mismatch_count=0
+新增 level_benchmark_pccm.json，固定生成 500 颗慢速环形弹进行真实场景压力测试
+501 个危险体时完整 observation：reference 22.98 FPS，auto 22.63 FPS，auto 慢约 1.5%
+level_6 平均 68.92 个危险体时：reference 153.57 FPS，auto 152.24 FPS，auto 慢约 0.9%
+结论是 ROI 子步骤优化未转化为端到端收益，训练默认继续使用 reference，ROI 与 auto 保留作后续分析
 旧 motion 环境和 lunai_v7_diagnose5 checkpoint 仍可正常加载
 单环境和双环境 PPO smoke training 均通过
 该条目仅记录实现完成，尚不是正式训练结果
