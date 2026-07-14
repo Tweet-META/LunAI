@@ -38,30 +38,26 @@ def evaluate(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
-        reward_gamma=config.gamma,
-        danger_shaping_enabled=args.danger_shaping_enabled,
-        wall_shaping_weight=args.wall_shaping_weight,
-        wall_state_penalty_weight=args.wall_state_penalty_weight,
-        upper_field_penalty_weight=args.upper_field_penalty_weight,
-        lower_field_threshold=args.lower_field_threshold,
-        observation_schema=config.observation_schema,
-        pccm_shaping_weight=args.pccm_shaping_weight,
+        pccm_state_penalty_weight=args.pccm_state_penalty_weight,
         pccm_prediction_frames=config.pccm_prediction_frames,
         pccm_halo_width=config.pccm_halo_width,
         pccm_wall_margin=config.pccm_wall_margin,
+        pccm_upper_field_threshold=config.pccm_upper_field_threshold,
+        pccm_upper_field_cost=config.pccm_upper_field_cost,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
-    shapes = cnn_observation_shapes(first_observation, env.get_map_history(), config.observation_schema)
+    shapes = cnn_observation_shapes(first_observation, env.get_map_history())
     validate_checkpoint_shapes(
         config,
         shapes,
         args.frame_stack,
         args.frame_stack_interval,
-        config.observation_schema,
         config.pccm_prediction_frames,
         config.pccm_halo_width,
         config.pccm_wall_margin,
+        config.pccm_upper_field_threshold,
+        config.pccm_upper_field_cost,
     )
 
     agent = CNNPPOAgent(config)
@@ -74,7 +70,7 @@ def evaluate(args: argparse.Namespace) -> None:
     try:
         for episode in range(1, args.episodes + 1):
             observation = env.reset(seed=args.seed + episode)
-            state = cnn_observation(observation, env.get_map_history(), config.observation_schema)
+            state = cnn_observation(observation, env.get_map_history())
             if args.print_action_probs:
                 print_action_probs(env, agent.action_probs(state))
 
@@ -91,7 +87,7 @@ def evaluate(args: argparse.Namespace) -> None:
                     action = agent.select_greedy_action(state)
                 action_counts[action] += 1
                 observation, reward, done, info = env.step(action)
-                state = cnn_observation(observation, env.get_map_history(), config.observation_schema)
+                state = cnn_observation(observation, env.get_map_history())
                 total_reward += reward
                 total_collisions += int(info.get("collided", False))
                 last_info = info
@@ -137,12 +133,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
-    parser.add_argument("--danger-shaping", action=argparse.BooleanOptionalAction, default=True, dest="danger_shaping_enabled")
-    parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
-    parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--lower-field-threshold", type=float, default=0.70)
-    parser.add_argument("--pccm-shaping-weight", type=float, default=0.05)
+    parser.add_argument("--pccm-state-penalty-weight", type=float, default=0.05)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--print-actions", action="store_true")
     parser.add_argument("--print-action-probs", action="store_true")

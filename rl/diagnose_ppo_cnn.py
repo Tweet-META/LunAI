@@ -56,7 +56,6 @@ def set_player_position(env: TouhouRLEnv, x: float, y: float) -> dict[str, np.nd
 def create_environment(
     args: argparse.Namespace,
     level_file: str,
-    reward_gamma: float,
     render: bool = False,
 ) -> TouhouRLEnv:
     return TouhouRLEnv(
@@ -68,17 +67,12 @@ def create_environment(
         random_player_start=False,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
-        reward_gamma=reward_gamma,
-        danger_shaping_enabled=False,
-        wall_shaping_weight=args.wall_shaping_weight,
-        wall_state_penalty_weight=args.wall_state_penalty_weight,
-        upper_field_penalty_weight=args.upper_field_penalty_weight,
-        lower_field_threshold=args.lower_field_threshold,
-        observation_schema=args.observation_schema,
-        pccm_shaping_weight=args.pccm_shaping_weight,
+        pccm_state_penalty_weight=args.pccm_state_penalty_weight,
         pccm_prediction_frames=args.pccm_prediction_frames,
         pccm_halo_width=args.pccm_halo_width,
         pccm_wall_margin=args.pccm_wall_margin,
+        pccm_upper_field_threshold=args.pccm_upper_field_threshold,
+        pccm_upper_field_cost=args.pccm_upper_field_cost,
     )
 
 
@@ -104,7 +98,7 @@ def diagnose_empty_field(
     env.reset(seed=args.seed)
     for name, (x, y) in NO_BULLET_POSITIONS.items():
         observation = set_player_position(env, x, y)
-        state = cnn_observation(observation, env.get_map_history(), env.observation_schema)
+        state = cnn_observation(observation, env.get_map_history())
         probabilities = agent.action_probs(state)
         order = np.argsort(probabilities)[::-1]
         top_three = ", ".join(
@@ -162,10 +156,9 @@ def save_heatmap(path: Path, heatmap: np.ndarray) -> None:
 def diagnose_episodes(
     args: argparse.Namespace,
     agent: CNNPPOAgent,
-    reward_gamma: float,
     output_dir: Path,
 ) -> dict[str, object]:
-    env = create_environment(args, args.level_file, reward_gamma, render=args.render)
+    env = create_environment(args, args.level_file, render=args.render)
     action_counts = np.zeros(len(env.ACTIONS), dtype=np.int64)
     positions: list[tuple[float, float]] = []
     trajectory_rows: list[dict[str, object]] = []
@@ -177,7 +170,7 @@ def diagnose_episodes(
     try:
         for episode in range(1, args.episodes + 1):
             observation = env.reset(seed=args.seed + episode)
-            state = cnn_observation(observation, env.get_map_history(), env.observation_schema)
+            state = cnn_observation(observation, env.get_map_history())
             done = False
             while not done:
                 if args.stochastic:
@@ -185,7 +178,7 @@ def diagnose_episodes(
                 else:
                     action = agent.select_greedy_action(state)
                 observation, reward, done, info = env.step(action)
-                state = cnn_observation(observation, env.get_map_history(), env.observation_schema)
+                state = cnn_observation(observation, env.get_map_history())
                 player_x = float(observation["player_features"][0])
                 player_y = float(observation["player_features"][1])
                 proximity = wall_proximity(observation)
@@ -241,14 +234,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=2)
     parser.add_argument("--level-file", type=str, default="level_diagnostic_aimed.json")
     parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
-    parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
-    parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--lower-field-threshold", type=float, default=0.70)
-    parser.add_argument("--pccm-shaping-weight", type=float, default=0.05)
+    parser.add_argument("--pccm-state-penalty-weight", type=float, default=0.05)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
     parser.add_argument("--pccm-halo-width", type=float, default=24.0)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
+    parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
+    parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
     parser.add_argument("--seed", type=int, default=2000)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--stochastic", action="store_true")
@@ -262,30 +253,32 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
-    args.observation_schema = config.observation_schema
     args.pccm_prediction_frames = config.pccm_prediction_frames
     args.pccm_halo_width = config.pccm_halo_width
     args.pccm_wall_margin = config.pccm_wall_margin
+    args.pccm_upper_field_threshold = config.pccm_upper_field_threshold
+    args.pccm_upper_field_cost = config.pccm_upper_field_cost
 
-    empty_env = create_environment(args, "level_diagnostic_empty.json", config.gamma, render=args.render)
+    empty_env = create_environment(args, "level_diagnostic_empty.json", render=args.render)
     try:
         observation = empty_env.reset(seed=args.seed)
-        shapes = cnn_observation_shapes(observation, empty_env.get_map_history(), config.observation_schema)
+        shapes = cnn_observation_shapes(observation, empty_env.get_map_history())
         validate_checkpoint_shapes(
             config,
             shapes,
             args.frame_stack,
             args.frame_stack_interval,
-            config.observation_schema,
             config.pccm_prediction_frames,
             config.pccm_halo_width,
             config.pccm_wall_margin,
+            config.pccm_upper_field_threshold,
+            config.pccm_upper_field_cost,
         )
 
         agent = CNNPPOAgent(config)
         agent.load(str(Path(args.model_path)))
         diagnose_empty_field(args, agent, empty_env, output_dir)
-        diagnose_episodes(args, agent, config.gamma, output_dir)
+        diagnose_episodes(args, agent, output_dir)
     finally:
         empty_env.close()
 

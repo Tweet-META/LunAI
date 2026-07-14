@@ -18,11 +18,11 @@ def touhou_env_worker(connection: Any, env_kwargs: dict[str, Any]) -> None:
             command, payload = connection.recv()
             if command == "reset":
                 observation = env.reset(seed=int(payload))
-                state = cnn_observation(observation, env.get_map_history(), env.observation_schema)
+                state = cnn_observation(observation, env.get_map_history())
                 connection.send(("ok", state))
             elif command == "step":
                 observation, reward, done, info = env.step(int(payload))
-                state = cnn_observation(observation, env.get_map_history(), env.observation_schema)
+                state = cnn_observation(observation, env.get_map_history())
                 connection.send(("ok", (state, float(reward), bool(done), info)))
             elif command == "close":
                 connection.send(("ok", None))

@@ -2,7 +2,7 @@
 
 LunAI is a reinforcement learning project for training bullet-hell game agents in a pygame-based Touhou-style environment.
 
-The current project focuses on a multi-scale, multi-frame CNN PPO agent. The MLP PPO agent is kept as a baseline, and the earlier DQN implementation remains under `rl/legacy_dqn/`.
+The current project focuses on a multi-scale, multi-frame CNN PPO agent. Earlier MLP PPO, DQN, and random baseline implementations are archived under `rl/legacy/`.
 
 ## Project Scope
 
@@ -14,18 +14,17 @@ This repository includes:
 - playable-area masks for player-centered local maps
 - RL environment wrappers
 - reward function design
-- MLP PPO baseline training scripts
 - CNN PPO training and evaluation scripts
-- legacy DQN baseline code under `rl/legacy_dqn/`
+- legacy MLP PPO, DQN, and random baseline code under `rl/legacy/`
 - curriculum levels for staged training
 - evaluation and visualization tools
 
 ## RL Entry Points
 
-MLP PPO baseline:
+Archived MLP PPO baseline:
 
 ```powershell
-python rl/train_ppo.py --episodes 300 --level-file level_1.json
+python rl/legacy/train_ppo.py --episodes 300 --level-file level_1.json
 ```
 
 CNN PPO main training path:
@@ -46,7 +45,7 @@ Each new PPO log begins with a `# run_config:` JSON line containing the final ef
 
 ### PCCM (Potential Collision Cost Map) Observation
 
-The current `pccm` observation schema keeps the three CNN map branches and gives every scale three channels per frame:
+The fixed PCCM observation keeps the three CNN map branches and gives every scale three channels per frame:
 
 - bullet occupancy or density
 - projected PCCM risk
@@ -54,11 +53,13 @@ The current `pccm` observation schema keeps the three CNN map branches and gives
 
 PCCM uses each bullet's own position, hitbox, and velocity to estimate current soft danger and the next five game frames. Bullet buffers, predicted trajectories, and four wall costs use soft probabilistic composition capped below hard collision. Current collision regions are then restored to `1.0`.
 
+The current environment prior also assigns the upper 70% of the playfield a mild PCCM cost that increases linearly from `0.0` at the boundary to `0.3` at the top. It is softly composed with wall and bullet costs rather than treated as a hard collision.
+
 The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. The full-grid NumPy implementation remains the training default. An exact floating-point ROI implementation and an experimental `auto` hybrid are retained for profiling, but real-level benchmarks did not show an end-to-end observation-building speedup. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
 
 Run `python tools/benchmark_pccm_roi.py` to compare the reference, pure ROI, and `auto` implementations at 80, 200, and 500 synthetic bullets. The command also checks maximum and mean absolute error and requires zero hard-collision mismatches. Run `python tools/benchmark_pccm_level.py` for a complete observation-building comparison on the dedicated 500-bullet pygame level.
 
-Old CNN checkpoints automatically use the legacy `motion` schema. New PCCM checkpoints store their observation schema, prediction horizon, halo width, and wall margin to prevent silent evaluation mismatches.
+PCCM checkpoints store their prediction horizon, halo width, and wall margin to prevent silent evaluation mismatches.
 
 ### Parallel Environment Sampling
 
@@ -70,7 +71,9 @@ python rl/train_ppo_cnn.py --config config.json
 
 The environment workers run pygame and observation building on CPU. The main process batches their observations for one GPU model, so workers do not create separate models or checkpoints. `rollout_steps` is the total PPO batch size and must be divisible by `num_envs`. Parallel training cannot use `--render`, and CNN logs include an `env_id` column.
 
-PCCM logs also record mean local risk, total PCCM shaping reward, wall-time ratio, and all nine episode action counts.
+PCCM logs also record mean local risk, total PCCM state penalty, wall-time ratio, and all nine episode action counts.
+
+The main reward applies a persistent `0.05 * current_local_PCCM` penalty on every non-collision frame.
 
 ## Acknowledgements
 

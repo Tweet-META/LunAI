@@ -17,10 +17,11 @@ class CNNPPOConfig:
     yellow_shape: tuple[int, int, int]
     blue_shape: tuple[int, int, int]
     player_dim: int
-    observation_schema: str = "pccm"
     pccm_prediction_frames: int = 5
     pccm_halo_width: float = 24.0
     pccm_wall_margin: float = 0.12
+    pccm_upper_field_threshold: float = 0.70
+    pccm_upper_field_cost: float = 0.30
     frame_stack: int = 1
     frame_stack_interval: int = 1
     action_dim: int = 9
@@ -272,10 +273,12 @@ class CNNPPOAgent:
 def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     checkpoint = torch.load(path, map_location="cpu")
     config_data = dict(checkpoint["config"])
-    config_data.setdefault("observation_schema", "motion")
     config_data.setdefault("pccm_prediction_frames", 5)
     config_data.setdefault("pccm_halo_width", 24.0)
     config_data.setdefault("pccm_wall_margin", 0.12)
+    config_data.setdefault("pccm_upper_field_threshold", 0.70)
+    # Old checkpoints were trained before the upper-field PCCM prior existed.
+    config_data.setdefault("pccm_upper_field_cost", 0.0)
     config_data.setdefault("frame_stack", 1)
     config_data.setdefault("frame_stack_interval", 1)
     config_data["red_shape"] = tuple(config_data["red_shape"])

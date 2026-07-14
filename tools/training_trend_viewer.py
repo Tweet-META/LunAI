@@ -25,7 +25,6 @@ HEIGHT = 860
 PADDING = 70
 PANEL_GAP = 110
 MOVING_AVERAGE_WINDOW = 20
-FRAME_THRESHOLDS = (600, 1200, 1500, 1800, 2000)
 SCATTER_BINS = 18
 
 
@@ -84,47 +83,6 @@ def moving_average(values: list[float], window: int) -> list[float]:
         current_window = min(index + 1, window)
         smoothed.append(running_sum / current_window)
     return smoothed
-
-
-# Return a compact summary for one group of rows.
-def summarize_rows(rows: list[dict[str, float]]) -> dict[str, float]:
-    if not rows:
-        return {}
-
-    frames = [row["frame_steps"] for row in rows]
-    rewards = [row["episode_reward"] for row in rows]
-    summary = {
-        "n": len(rows),
-        "mean_frame": sum(frames) / len(frames),
-        "max_frame": max(frames),
-        "min_frame": min(frames),
-        "mean_reward": sum(rewards) / len(rewards),
-    }
-    for threshold in FRAME_THRESHOLDS:
-        summary[f"hit_{threshold}"] = sum(frame >= threshold for frame in frames)
-    return summary
-
-
-# Build rolling window summaries for the text panel.
-def build_summary_text(rows: list[dict[str, float]]) -> list[str]:
-    total = summarize_rows(rows)
-    recent_50 = summarize_rows(rows[-50:])
-    recent_20 = summarize_rows(rows[-20:])
-    last_episode = int(rows[-1]["episode"]) if rows else 0
-
-    lines = [f"episodes: {len(rows)}    last episode: {last_episode}"]
-    for name, summary in (("all", total), ("last 50", recent_50), ("last 20", recent_20)):
-        if not summary:
-            continue
-        lines.append(
-            f"{name:<7} mean={summary['mean_frame']:.1f}  max={summary['max_frame']:.0f}  "
-            f"min={summary['min_frame']:.0f}  reward={summary['mean_reward']:.3f}"
-        )
-        lines.append(
-            f"{'':<7} >=1200:{summary['hit_1200']:.0f}  >=1500:{summary['hit_1500']:.0f}  "
-            f">=1800:{summary['hit_1800']:.0f}  >=2000:{summary['hit_2000']:.0f}"
-        )
-    return lines
 
 
 # Find a readable font on Windows or fall back to Pillow default.
@@ -339,23 +297,6 @@ def draw_reward_step_chart(
         draw.line(curve_points, fill=(210, 65, 45), width=5)
     for x, y in curve_points:
         draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(210, 65, 45))
-
-
-# Draw a small text report inside the trend image.
-def draw_summary_panel(
-    draw: ImageDraw.ImageDraw,
-    rect: tuple[int, int, int, int],
-    lines: list[str],
-    font: ImageFont.ImageFont,
-    small_font: ImageFont.ImageFont,
-) -> None:
-    left, top, right, bottom = rect
-    draw.rectangle(rect, fill=(247, 248, 250), outline=(60, 60, 60), width=2)
-    draw.text((left + 18, top + 14), "summary", fill=(20, 20, 20), font=font)
-    y = top + 52
-    for line in lines:
-        draw.text((left + 18, y), line, fill=(45, 45, 45), font=small_font)
-        y += 26
 
 
 # Create and save one training trend image.

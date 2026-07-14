@@ -11,8 +11,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from rl.legacy_dqn.dqn_agent import DQNAgent, load_dqn_config
-from rl.observation_utils import flatten_observation, observation_dim
+from rl.legacy.dqn_agent import DQNAgent, load_dqn_config
+from rl.legacy.observation_utils import flatten_observation, observation_dim
 from rl.touhou_rl_env import TouhouRLEnv
 
 
@@ -31,7 +31,6 @@ def evaluate(args: argparse.Namespace) -> None:
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
-        reward_gamma=config.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)

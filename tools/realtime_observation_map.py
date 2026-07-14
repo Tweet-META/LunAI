@@ -26,19 +26,6 @@ if TYPE_CHECKING:
     from assets.scripts.scenes.GameScene import GameScene
 
 
-ACTION_TO_VECTOR = {
-    0: Vector2.zero(),
-    1: Vector2.up(),
-    2: Vector2.down(),
-    3: Vector2.left(),
-    4: Vector2.right(),
-    5: Vector2.up() + Vector2.left(),
-    6: Vector2.up() + Vector2.right(),
-    7: Vector2.down() + Vector2.left(),
-    8: Vector2.down() + Vector2.right(),
-}
-
-
 # Convert a keyboard direction vector into one action id.
 def vector_to_action(direction: Vector2) -> int:
     x = int(direction.x())
@@ -143,9 +130,6 @@ def main() -> None:
             yellow_grid=(16, 16),
             red_size=(128, 128),
             red_map=(64, 64),
-            max_speed=500.0,
-            observation_schema="pccm",
-            pccm_debug=False,
         )
     )
 

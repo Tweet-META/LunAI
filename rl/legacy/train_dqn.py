@@ -13,9 +13,9 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from rl.legacy_dqn.dqn_agent import DQNAgent, DQNConfig
-from rl.legacy_dqn.replay_buffer import ReplayBuffer
-from rl.observation_utils import flatten_observation, observation_dim, validate_flat_observation
+from rl.legacy.dqn_agent import DQNAgent, DQNConfig
+from rl.legacy.replay_buffer import ReplayBuffer
+from rl.legacy.observation_utils import flatten_observation, observation_dim, validate_flat_observation
 from rl.touhou_rl_env import TouhouRLEnv
 
 
@@ -57,7 +57,6 @@ def train(args: argparse.Namespace) -> None:
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
-        reward_gamma=args.gamma,
     )
     first_observation = env.reset(seed=args.seed)
     state_dim = observation_dim(first_observation)

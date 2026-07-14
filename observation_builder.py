@@ -12,7 +12,6 @@ class BulletState:
     radius: float
     vx: float
     vy: float
-    speed: float
 
 
 @dataclass(frozen=True)
@@ -32,13 +31,12 @@ class ObservationConfig:
     yellow_grid: tuple[int, int] = (16, 16)
     red_size: tuple[int, int] = (128, 128)
     red_map: tuple[int, int] = (64, 64)
-    max_speed: float = 500.0
-    observation_schema: str = "motion"
     pccm_prediction_frames: int = 5
     pccm_halo_width: float = 24.0
     pccm_wall_margin: float = 0.12
+    pccm_upper_field_threshold: float = 0.70
+    pccm_upper_field_cost: float = 0.30
     pccm_soft_cap: float = 0.8
-    pccm_debug: bool = False
     pccm_implementation: str = "reference"
 
 
@@ -73,11 +71,6 @@ def make_occupancy_map(width: int, height: int, bullets: list[BulletState]) -> n
 def make_integral_image(binary_map: np.ndarray) -> np.ndarray:
     integral = binary_map.cumsum(axis=0).cumsum(axis=1)
     return np.pad(integral, ((1, 0), (1, 0)), mode="constant")
-
-
-# Read the occupied area inside one rectangle from an integral image.
-def rectangle_sum(integral: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> float:
-    return float(integral[y2, x2] - integral[y1, x2] - integral[y2, x1] + integral[y1, x1])
 
 
 # Convert a possibly padded window into a fixed-size hitbox density grid.
@@ -198,6 +191,43 @@ def bilinear_resize(values: np.ndarray, output_shape: tuple[int, int]) -> np.nda
     return ((1.0 - wy) * top + wy * bottom).astype(np.float32)
 
 
+# Build soft costs for walls and the less-preferred upper playfield.
+def environment_pccm_cost(
+    xx: np.ndarray,
+    yy: np.ndarray,
+    inside: np.ndarray,
+    field_w: int,
+    field_h: int,
+    wall_margin: float,
+    upper_field_threshold: float,
+    upper_field_cost: float,
+) -> np.ndarray:
+    horizontal_margin = max(1.0, field_w * wall_margin)
+    vertical_margin = max(1.0, field_h * wall_margin)
+    environment_cost = np.zeros(xx.shape, dtype=np.float32)
+    wall_distances = (
+        (xx, horizontal_margin),
+        (field_w - xx, horizontal_margin),
+        (yy, vertical_margin),
+        (field_h - yy, vertical_margin),
+    )
+    for distance, margin in wall_distances:
+        contribution = np.where(
+            inside,
+            0.5 * np.clip(1.0 - distance / margin, 0.0, 1.0),
+            0.0,
+        ).astype(np.float32)
+        environment_cost = combine_soft_cost(environment_cost, contribution)
+
+    upper_boundary = max(1.0, field_h * upper_field_threshold)
+    upper_contribution = np.where(
+        inside,
+        upper_field_cost * np.clip(1.0 - yy / upper_boundary, 0.0, 1.0),
+        0.0,
+    ).astype(np.float32)
+    return combine_soft_cost(environment_cost, upper_contribution)
+
+
 # Build PCCM samples with full-grid NumPy broadcasting as the reference.
 def pccm_sample_components_reference(
     bullets: list[BulletState],
@@ -210,6 +240,8 @@ def pccm_sample_components_reference(
     halo_width: float,
     wall_margin: float,
     fps: float = 60.0,
+    upper_field_threshold: float = 0.70,
+    upper_field_cost: float = 0.30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     xx, yy = grid_cell_centers(window, sample_shape)
     inside = (xx >= 0.0) & (xx < field_w) & (yy >= 0.0) & (yy < field_h)
@@ -263,22 +295,16 @@ def pccm_sample_components_reference(
                 axis=0,
             ).astype(np.float32)
 
-    horizontal_margin = max(1.0, field_w * wall_margin)
-    vertical_margin = max(1.0, field_h * wall_margin)
-    wall_cost = np.zeros(sample_shape, dtype=np.float32)
-    wall_distances = (
-        (xx, horizontal_margin),
-        (field_w - xx, horizontal_margin),
-        (yy, vertical_margin),
-        (field_h - yy, vertical_margin),
+    wall_cost = environment_pccm_cost(
+        xx,
+        yy,
+        inside,
+        field_w,
+        field_h,
+        wall_margin,
+        upper_field_threshold,
+        upper_field_cost,
     )
-    for distance, margin in wall_distances:
-        contribution = np.where(
-            inside,
-            0.5 * np.clip(1.0 - distance / margin, 0.0, 1.0),
-            0.0,
-        ).astype(np.float32)
-        wall_cost = combine_soft_cost(wall_cost, contribution)
 
     hard_collision[~inside] = 0.0
     return current_cost, prediction_cost, wall_cost, hard_collision
@@ -338,6 +364,8 @@ def pccm_sample_components_roi(
     halo_width: float,
     wall_margin: float,
     fps: float = 60.0,
+    upper_field_threshold: float = 0.70,
+    upper_field_cost: float = 0.30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     xx, yy = grid_cell_centers(window, sample_shape)
     inside = (xx >= 0.0) & (xx < field_w) & (yy >= 0.0) & (yy < field_h)
@@ -433,22 +461,16 @@ def pccm_sample_components_roi(
                 target = prediction_cost[row1:row2, col1:col2]
                 target[:] = combine_soft_cost(target, combined_contribution)
 
-    horizontal_margin = max(1.0, field_w * wall_margin)
-    vertical_margin = max(1.0, field_h * wall_margin)
-    wall_cost = np.zeros(sample_shape, dtype=np.float32)
-    wall_distances = (
-        (xx, horizontal_margin),
-        (field_w - xx, horizontal_margin),
-        (yy, vertical_margin),
-        (field_h - yy, vertical_margin),
+    wall_cost = environment_pccm_cost(
+        xx,
+        yy,
+        inside,
+        field_w,
+        field_h,
+        wall_margin,
+        upper_field_threshold,
+        upper_field_cost,
     )
-    for distance, margin in wall_distances:
-        contribution = np.where(
-            inside,
-            0.5 * np.clip(1.0 - distance / margin, 0.0, 1.0),
-            0.0,
-        ).astype(np.float32)
-        wall_cost = combine_soft_cost(wall_cost, contribution)
 
     hard_collision[~inside] = 0.0
     return current_cost, prediction_cost, wall_cost, hard_collision
@@ -467,6 +489,8 @@ def pccm_sample_components(
     wall_margin: float,
     fps: float = 60.0,
     implementation: str = "reference",
+    upper_field_threshold: float = 0.70,
+    upper_field_cost: float = 0.30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     if implementation == "auto":
         # Broadcasting wins on the tiny blue grid; ROI wins on 32x32 samples.
@@ -489,6 +513,8 @@ def pccm_sample_components(
         halo_width,
         wall_margin,
         fps,
+        upper_field_threshold,
+        upper_field_cost,
     )
 
 
@@ -506,6 +532,8 @@ def projected_pccm(
     wall_margin: float,
     soft_cap: float,
     implementation: str = "reference",
+    upper_field_threshold: float = 0.70,
+    upper_field_cost: float = 0.30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     current, prediction, wall, hard = pccm_sample_components(
         bullets,
@@ -518,6 +546,8 @@ def projected_pccm(
         halo_width,
         wall_margin,
         implementation=implementation,
+        upper_field_threshold=upper_field_threshold,
+        upper_field_cost=upper_field_cost,
     )
     if sample_shape[0] > output_shape[0] or sample_shape[1] > output_shape[1]:
         current = top_fraction_pool(current, output_shape)
@@ -544,45 +574,15 @@ def projected_pccm(
     return current.astype(np.float32), prediction.astype(np.float32), wall.astype(np.float32), final
 
 
-def average_speed_grid(
-    bullets: list[BulletState],
-    window: tuple[int, int, int, int],
-    grid_shape: tuple[int, int],
-    max_speed: float,
-) -> np.ndarray:
-    # Compute average bullet speed for each grid cell.
-    x1, y1, x2, y2 = window
-    rows, cols = grid_shape
-    speed_sum = np.zeros((rows, cols), dtype=np.float32)
-    counts = np.zeros((rows, cols), dtype=np.float32)
-    win_w = max(1, x2 - x1)
-    win_h = max(1, y2 - y1)
-
-    for bullet in bullets:
-        if not (x1 <= bullet.x < x2 and y1 <= bullet.y < y2):
-            continue
-        col = min(cols - 1, int((bullet.x - x1) / win_w * cols))
-        row = min(rows - 1, int((bullet.y - y1) / win_h * rows))
-        speed_sum[row, col] += bullet.speed
-        counts[row, col] += 1.0
-
-    out = np.divide(speed_sum, counts, out=np.zeros_like(speed_sum), where=counts > 0)
-    return np.clip(out / max_speed, 0.0, 1.0)
-
-
-def red_local_maps(
+def red_occupancy_map(
     bullets: list[BulletState],
     window: tuple[int, int, int, int],
     map_shape: tuple[int, int],
-    max_speed: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    # Build local red-zone occupancy and motion maps.
+) -> np.ndarray:
+    # Build the local red-zone collision occupancy map.
     x1, y1, x2, y2 = window
     rows, cols = map_shape
     occupancy = np.zeros((rows, cols), dtype=np.float32)
-    vx_map = np.zeros((rows, cols), dtype=np.float32)
-    vy_map = np.zeros((rows, cols), dtype=np.float32)
-    speed_map = np.zeros((rows, cols), dtype=np.float32)
     win_w = max(1, x2 - x1)
     win_h = max(1, y2 - y1)
 
@@ -605,29 +605,25 @@ def red_local_maps(
         cell_x = x1 + (xx + 0.5) * win_w / cols
         cell_y = y1 + (yy + 0.5) * win_h / rows
         mask = (cell_x - bullet.x) ** 2 + (cell_y - bullet.y) ** 2 <= bullet.radius ** 2
-        target = speed_map[row1:row2, col1:col2]
-        update = mask & ((bullet.speed / max_speed) >= target)
-
         occupancy[row1:row2, col1:col2][mask] = 1.0
-        target[update] = min(1.0, bullet.speed / max_speed)
-        vx_map[row1:row2, col1:col2][update] = np.clip(bullet.vx / max_speed, -1.0, 1.0)
-        vy_map[row1:row2, col1:col2][update] = np.clip(bullet.vy / max_speed, -1.0, 1.0)
 
-    return occupancy, vx_map, vy_map, speed_map
+    return occupancy
 
 
 class ObservationBuilder:
     # Store observation settings for later builds.
     def __init__(self, config: ObservationConfig | None = None):
         self.config = config or ObservationConfig()
-        if self.config.observation_schema not in {"motion", "pccm"}:
-            raise ValueError(f"Unknown observation schema: {self.config.observation_schema}.")
         if self.config.pccm_prediction_frames < 1:
             raise ValueError("PCCM prediction frames must be positive.")
         if self.config.pccm_halo_width <= 0.0:
             raise ValueError("PCCM halo width must be positive.")
         if not 0.0 < self.config.pccm_wall_margin <= 0.5:
             raise ValueError("PCCM wall margin must be in (0, 0.5].")
+        if not 0.0 < self.config.pccm_upper_field_threshold <= 1.0:
+            raise ValueError("PCCM upper-field threshold must be in (0, 1].")
+        if not 0.0 <= self.config.pccm_upper_field_cost < self.config.pccm_soft_cap:
+            raise ValueError("PCCM upper-field cost must be in [0, soft cap).")
         if not 0.0 < self.config.pccm_soft_cap < 1.0:
             raise ValueError("PCCM soft cap must be in (0, 1).")
         if self.config.pccm_implementation not in {"auto", "reference", "roi"}:
@@ -647,12 +643,10 @@ class ObservationBuilder:
                 radius=bullet.radius + player.radius,
                 vx=bullet.vx,
                 vy=bullet.vy,
-                speed=bullet.speed,
             )
             for bullet in bullets
         ]
-        occupancy_bullets = collision_bullets if cfg.observation_schema == "pccm" else bullets
-        occupancy = make_occupancy_map(cfg.playfield_width, cfg.playfield_height, occupancy_bullets)
+        occupancy = make_occupancy_map(cfg.playfield_width, cfg.playfield_height, collision_bullets)
         integral = make_integral_image(occupancy)
         yellow_valid = valid_area_grid(yellow_window, cfg.yellow_grid, cfg.playfield_width, cfg.playfield_height)
         red_valid = valid_area_grid(red_window, cfg.red_map, cfg.playfield_width, cfg.playfield_height)
@@ -688,30 +682,10 @@ class ObservationBuilder:
             "_red_window": np.array(red_window, dtype=np.int32),
         }
 
-        if cfg.observation_schema == "motion":
-            red_occ, red_vx, red_vy, red_speed = red_local_maps(
-                bullets,
-                red_window,
-                cfg.red_map,
-                cfg.max_speed,
-            )
-            observation.update(
-                {
-                    "blue_speed": average_speed_grid(bullets, full_window, cfg.blue_grid, cfg.max_speed),
-                    "yellow_speed": average_speed_grid(bullets, yellow_window, cfg.yellow_grid, cfg.max_speed),
-                    "red_occupancy": red_occ,
-                    "red_vx": red_vx,
-                    "red_vy": red_vy,
-                    "red_speed": red_speed,
-                }
-            )
-            return observation
-
-        red_occ, _, _, _ = red_local_maps(
+        red_occ = red_occupancy_map(
             collision_bullets,
             red_window,
             cfg.red_map,
-            cfg.max_speed,
         )
         blue_components = projected_pccm(
             bullets,
@@ -726,6 +700,8 @@ class ObservationBuilder:
             cfg.pccm_wall_margin,
             cfg.pccm_soft_cap,
             implementation=cfg.pccm_implementation,
+            upper_field_threshold=cfg.pccm_upper_field_threshold,
+            upper_field_cost=cfg.pccm_upper_field_cost,
         )
         yellow_components = projected_pccm(
             bullets,
@@ -740,6 +716,8 @@ class ObservationBuilder:
             cfg.pccm_wall_margin,
             cfg.pccm_soft_cap,
             implementation=cfg.pccm_implementation,
+            upper_field_threshold=cfg.pccm_upper_field_threshold,
+            upper_field_cost=cfg.pccm_upper_field_cost,
         )
         red_components = projected_pccm(
             bullets,
@@ -754,6 +732,8 @@ class ObservationBuilder:
             cfg.pccm_wall_margin,
             cfg.pccm_soft_cap,
             implementation=cfg.pccm_implementation,
+            upper_field_threshold=cfg.pccm_upper_field_threshold,
+            upper_field_cost=cfg.pccm_upper_field_cost,
         )
         observation.update(
             {
@@ -764,12 +744,4 @@ class ObservationBuilder:
             }
         )
         observation["red_pccm"][red_occ > 0.0] = 1.0
-        if cfg.pccm_debug:
-            observation.update(
-                {
-                    "_red_pccm_bullet": red_components[0],
-                    "_red_pccm_prediction": red_components[1],
-                    "_red_pccm_wall": red_components[2],
-                }
-            )
         return observation

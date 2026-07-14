@@ -36,8 +36,6 @@ def create_builder(implementation: str) -> ObservationBuilder:
             yellow_grid=(16, 16),
             red_size=(128, 128),
             red_map=(64, 64),
-            max_speed=500.0,
-            observation_schema="pccm",
             pccm_prediction_frames=5,
             pccm_halo_width=24.0,
             pccm_wall_margin=0.12,

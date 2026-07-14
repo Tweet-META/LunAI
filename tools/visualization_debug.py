@@ -122,21 +122,6 @@ def draw_heatmap_panel(
     pygame.draw.rect(screen, border_color, rect, 2)
 
 
-# Draw the player hitbox marker inside a red-zone panel.
-def draw_player_hitbox_marker(screen: pygame.Surface, rect: pygame.Rect, observation: dict[str, np.ndarray]) -> None:
-    player_features = observation["player_features"]
-    red_window = observation["_red_window"]
-    play_x = float(player_features[0]) * int(observation["_blue_window"][2])
-    play_y = float(player_features[1]) * int(observation["_blue_window"][3])
-    red_x1, red_y1, red_x2, red_y2 = [int(v) for v in red_window]
-    red_w = max(1, red_x2 - red_x1)
-    red_h = max(1, red_y2 - red_y1)
-    marker_x = rect.left + round((play_x - red_x1) / red_w * rect.width)
-    marker_y = rect.top + round((play_y - red_y1) / red_h * rect.height)
-    pygame.draw.circle(screen, WHITE, (marker_x, marker_y), 5)
-    pygame.draw.circle(screen, BLACK, (marker_x, marker_y), 6, 2)
-
-
 # Project one world-space window into a full-field PCCM panel.
 def _window_panel_rect(
     window: np.ndarray,
@@ -195,57 +180,7 @@ def draw_full_pccm_panel(
     screen.blit(panel, rect.topleft)
 
 
-# Draw one PCCM overview or the legacy motion-schema panels.
+# Draw one full-field PCCM overview.
 def draw_observation_panels(screen: pygame.Surface, observation: dict[str, np.ndarray], origin: tuple[int, int] = (690, 420)) -> None:
     x, y = origin
-    if "red_pccm" in observation:
-        draw_full_pccm_panel(screen, observation, pygame.Rect(x, y, 260, 303))
-        return
-
-    draw_heatmap_panel(screen, observation["blue_density"], pygame.Rect(x, y, 120, 120), (70, 130, 255))
-    draw_heatmap_panel(screen, observation["blue_speed"], pygame.Rect(x + 140, y, 120, 120), (80, 210, 255))
-    draw_heatmap_panel(screen, observation["yellow_density"], pygame.Rect(x, y + 145, 120, 120), (255, 220, 70), valid_mask=observation["yellow_valid"])
-    draw_heatmap_panel(screen, observation["yellow_speed"], pygame.Rect(x + 140, y + 145, 120, 120), (255, 170, 60), valid_mask=observation["yellow_valid"])
-    red_occupancy_rect = pygame.Rect(x, y + 290, 120, 120)
-    red_speed_rect = pygame.Rect(x + 140, y + 290, 120, 120)
-    draw_heatmap_panel(screen, observation["red_occupancy"], red_occupancy_rect, (255, 70, 70), valid_mask=observation["red_valid"])
-    draw_heatmap_panel(screen, observation["red_speed"], red_speed_rect, (255, 120, 120), valid_mask=observation["red_valid"])
-    draw_player_hitbox_marker(screen, red_occupancy_rect, observation)
-    draw_player_hitbox_marker(screen, red_speed_rect, observation)
-
-
-# Save the main observation maps as a debug image.
-def save_debug_image(path: str, observation: dict[str, np.ndarray]) -> None:
-    import matplotlib.pyplot as plt
-
-    if "red_pccm" in observation:
-        panels = [
-            ("blue_pccm", observation["blue_pccm"]),
-            ("yellow_pccm", observation["yellow_pccm"]),
-            ("red_occupancy", observation["red_occupancy"]),
-            ("bullet_buffer", observation.get("_red_pccm_bullet", np.zeros_like(observation["red_pccm"]))),
-            ("prediction", observation.get("_red_pccm_prediction", np.zeros_like(observation["red_pccm"]))),
-            ("wall", observation.get("_red_pccm_wall", np.zeros_like(observation["red_pccm"]))),
-            ("red_pccm", observation["red_pccm"]),
-            ("red_playable_mask", observation["red_valid"]),
-            ("yellow_playable_mask", observation["yellow_valid"]),
-        ]
-        fig, axes = plt.subplots(3, 3, figsize=(9, 9))
-    else:
-        panels = [
-            ("blue_density", observation["blue_density"]),
-            ("blue_speed", observation["blue_speed"]),
-            ("yellow_density", observation["yellow_density"]),
-            ("yellow_speed", observation["yellow_speed"]),
-            ("red_occupancy", observation["red_occupancy"]),
-            ("red_speed", observation["red_speed"]),
-        ]
-        fig, axes = plt.subplots(2, 3, figsize=(9, 6))
-    for ax, (title, values) in zip(axes.flat, panels):
-        ax.imshow(values, vmin=0.0, vmax=1.0, interpolation="nearest")
-        ax.set_title(title)
-        ax.set_xticks([])
-        ax.set_yticks([])
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
+    draw_full_pccm_panel(screen, observation, pygame.Rect(x, y, 260, 303))

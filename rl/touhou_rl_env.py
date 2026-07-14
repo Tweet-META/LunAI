@@ -13,13 +13,9 @@ import pygame
 
 from rl.reward import (
     compute_frame_reward,
-    danger_potential_shaping,
     local_pccm_cost,
-    pccm_transition_shaping,
-    upper_field_state_penalty,
+    pccm_state_penalty,
     wall_proximity,
-    wall_proximity_shaping,
-    wall_state_penalty,
 )
 from rl.cnn_observation_utils import cnn_map_keys
 
@@ -56,18 +52,12 @@ class TouhouRLEnv:
         player_start_margin: float = 80.0,
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
-        training_invincible: bool = False,
-        reward_gamma: float = 0.99,
-        danger_shaping_enabled: bool = True,
-        wall_shaping_weight: float = 0.01,
-        wall_state_penalty_weight: float = 0.0,
-        upper_field_penalty_weight: float = 0.0,
-        lower_field_threshold: float = 0.70,
-        observation_schema: str = "motion",
-        pccm_shaping_weight: float = 0.0,
+        pccm_state_penalty_weight: float = 0.0,
         pccm_prediction_frames: int = 5,
         pccm_halo_width: float = 24.0,
         pccm_wall_margin: float = 0.12,
+        pccm_upper_field_threshold: float = 0.70,
+        pccm_upper_field_cost: float = 0.30,
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -91,33 +81,17 @@ class TouhouRLEnv:
         self.frame_stack = int(frame_stack)
         self.frame_stack_interval = int(frame_stack_interval)
         self.map_history_size = 1 + (self.frame_stack - 1) * self.frame_stack_interval
-        self.training_invincible = bool(training_invincible)
-        if not 0.0 <= float(reward_gamma) <= 1.0:
-            raise ValueError(f"reward_gamma must be in [0, 1], got {reward_gamma}.")
-        self.reward_gamma = float(reward_gamma)
-        self.danger_shaping_enabled = bool(danger_shaping_enabled)
-        if float(wall_shaping_weight) < 0.0:
-            raise ValueError(f"wall_shaping_weight must be non-negative, got {wall_shaping_weight}.")
-        self.wall_shaping_weight = float(wall_shaping_weight)
-        if float(wall_state_penalty_weight) < 0.0:
-            raise ValueError(f"wall_state_penalty_weight must be non-negative, got {wall_state_penalty_weight}.")
-        self.wall_state_penalty_weight = float(wall_state_penalty_weight)
-        if float(upper_field_penalty_weight) < 0.0:
-            raise ValueError(f"upper_field_penalty_weight must be non-negative, got {upper_field_penalty_weight}.")
-        if not 0.0 < float(lower_field_threshold) <= 1.0:
-            raise ValueError(f"lower_field_threshold must be in (0, 1], got {lower_field_threshold}.")
-        self.upper_field_penalty_weight = float(upper_field_penalty_weight)
-        self.lower_field_threshold = float(lower_field_threshold)
-        if observation_schema not in {"motion", "pccm"}:
-            raise ValueError(f"Unknown observation schema: {observation_schema}.")
-        if float(pccm_shaping_weight) < 0.0:
-            raise ValueError(f"PCCM shaping weight must be non-negative, got {pccm_shaping_weight}.")
-        self.observation_schema = observation_schema
-        self.MAP_KEYS = cnn_map_keys(observation_schema)
-        self.pccm_shaping_weight = float(pccm_shaping_weight)
+        if float(pccm_state_penalty_weight) < 0.0:
+            raise ValueError(
+                f"PCCM state penalty weight must be non-negative, got {pccm_state_penalty_weight}."
+            )
+        self.MAP_KEYS = cnn_map_keys()
+        self.pccm_state_penalty_weight = float(pccm_state_penalty_weight)
         self.pccm_prediction_frames = int(pccm_prediction_frames)
         self.pccm_halo_width = float(pccm_halo_width)
         self.pccm_wall_margin = float(pccm_wall_margin)
+        self.pccm_upper_field_threshold = float(pccm_upper_field_threshold)
+        self.pccm_upper_field_cost = float(pccm_upper_field_cost)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
 
@@ -139,12 +113,11 @@ class TouhouRLEnv:
                 yellow_grid=(16, 16),
                 red_size=(128, 128),
                 red_map=(64, 64),
-                max_speed=500.0,
-                observation_schema=self.observation_schema,
                 pccm_prediction_frames=self.pccm_prediction_frames,
                 pccm_halo_width=self.pccm_halo_width,
                 pccm_wall_margin=self.pccm_wall_margin,
-                pccm_debug=False,
+                pccm_upper_field_threshold=self.pccm_upper_field_threshold,
+                pccm_upper_field_cost=self.pccm_upper_field_cost,
             )
         )
 
@@ -162,9 +135,9 @@ class TouhouRLEnv:
         self.episode_reward = 0.0
         self.last_collided = False
         self.last_pccm_cost = 0.0
-        self.last_pccm_shaping_reward = 0.0
+        self.last_pccm_state_penalty = 0.0
         self.episode_pccm_cost_sum = 0.0
-        self.episode_pccm_shaping_reward = 0.0
+        self.episode_pccm_state_penalty = 0.0
         self.episode_wall_frames = 0
         self.episode_action_counts = np.zeros(len(self.ACTIONS), dtype=np.int64)
 
@@ -200,7 +173,6 @@ class TouhouRLEnv:
             for enemy_data in self.scene.level_enemies:
                 enemy_data["time"] = float(enemy_data["time"]) + random.uniform(0.0, self.level_spawn_time_jitter)
             self.scene.level_enemies.sort(key=lambda enemy: enemy["time"])
-        self.scene.player.training_invincible = self.training_invincible
         if self.random_player_start:
             self._randomize_player_start()
         self.steps = 0
@@ -214,9 +186,9 @@ class TouhouRLEnv:
         self.episode_reward = 0.0
         self.last_collided = False
         self.last_pccm_cost = local_pccm_cost(self.last_observation)
-        self.last_pccm_shaping_reward = 0.0
+        self.last_pccm_state_penalty = 0.0
         self.episode_pccm_cost_sum = 0.0
-        self.episode_pccm_shaping_reward = 0.0
+        self.episode_pccm_state_penalty = 0.0
         self.episode_wall_frames = 0
         self.episode_action_counts.fill(0)
         return self.last_observation
@@ -235,17 +207,15 @@ class TouhouRLEnv:
         collided = False
         done = False
         observation = None
-        decision_start_observation = self.last_observation
-        if decision_start_observation is None:
+        if self.last_observation is None:
             raise RuntimeError("The environment has no observation before stepping.")
         previous_action_for_reward = self.previous_action
         self.previous_action = action
         self.steps += 1
         self.episode_action_counts[action] += 1
-        previous_frame_observation = decision_start_observation
-        action_pccm_shaping_reward = 0.0
+        action_pccm_state_penalty = 0.0
 
-        for repeat_index in range(self.action_repeat):
+        for _ in range(self.action_repeat):
             self.scene.player.slow = False
             self.scene.player.move(direction)
             self.scene.update(1 / self.FPS)
@@ -257,33 +227,13 @@ class TouhouRLEnv:
             contact_frames += int(collided)
             done = self._is_done(collided)
             frame_reward = compute_frame_reward(action, previous_action_for_reward, collided)
-            frame_reward -= wall_state_penalty(observation, self.wall_state_penalty_weight)
-            frame_reward -= upper_field_state_penalty(
-                observation,
-                self.upper_field_penalty_weight,
-                self.lower_field_threshold,
-            )
-            pccm_reward = pccm_transition_shaping(
-                previous_frame_observation,
+            state_penalty = pccm_state_penalty(
                 observation,
                 collided,
-                self.pccm_shaping_weight,
+                self.pccm_state_penalty_weight,
             )
-            frame_reward += pccm_reward
-            action_pccm_shaping_reward += pccm_reward
-            if done or repeat_index == self.action_repeat - 1:
-                if self.danger_shaping_enabled:
-                    frame_reward += danger_potential_shaping(
-                        decision_start_observation,
-                        observation,
-                        done,
-                        self.reward_gamma,
-                    )
-                frame_reward += wall_proximity_shaping(
-                    decision_start_observation,
-                    observation,
-                    self.wall_shaping_weight,
-                )
+            frame_reward -= state_penalty
+            action_pccm_state_penalty += state_penalty
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp
             self.last_observation = observation
@@ -291,12 +241,11 @@ class TouhouRLEnv:
             self.episode_reward += frame_reward
             self.last_collided = collided
             self.last_pccm_cost = local_pccm_cost(observation)
-            self.last_pccm_shaping_reward = pccm_reward
+            self.last_pccm_state_penalty = state_penalty
             self.episode_pccm_cost_sum += self.last_pccm_cost
-            self.episode_pccm_shaping_reward += pccm_reward
+            self.episode_pccm_state_penalty += state_penalty
             self.episode_wall_frames += int(wall_proximity(observation) > 0.0)
             previous_action_for_reward = action
-            previous_frame_observation = observation
             if self.render_mode == "human":
                 self.render()
             if done:
@@ -315,8 +264,8 @@ class TouhouRLEnv:
             "level_file": self.current_level_file,
             "local_pccm_cost": self.last_pccm_cost,
             "mean_local_pccm": self.episode_pccm_cost_sum / max(1, self.frame_steps),
-            "pccm_shaping_reward": action_pccm_shaping_reward,
-            "episode_pccm_shaping_reward": self.episode_pccm_shaping_reward,
+            "pccm_state_penalty": action_pccm_state_penalty,
+            "episode_pccm_state_penalty": self.episode_pccm_state_penalty,
             "wall_time_ratio": self.episode_wall_frames / max(1, self.frame_steps),
             "action_counts": self.episode_action_counts.tolist(),
         }
@@ -438,7 +387,7 @@ class TouhouRLEnv:
 
     # Check whether the current episode should stop.
     def _is_done(self, collided: bool) -> bool:
-        if collided and not self.training_invincible:
+        if collided:
             return True
         if self.max_steps is not None and self.frame_steps >= self.max_steps:
             return True

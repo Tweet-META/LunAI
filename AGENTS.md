@@ -6,7 +6,7 @@
 
 LunAI（读作“露奈”）是一个用于弹幕游戏避弹研究的强化学习项目。当前主线是多尺度、多帧 CNN + PPO，研究重点是用蓝、黄、红三个尺度模拟人类从全局规划到近距离反应的视觉过程。
 
-环境基于 `NumPix/pygame-touhou` 修改。MLP PPO 作为 baseline 保留，DQN 已移入 `rl/legacy_dqn/`，不要将 DQN 恢复为主线。
+环境基于 `NumPix/pygame-touhou` 修改。MLP PPO、DQN 和随机 baseline 已移入 `rl/legacy/`，不要将它们恢复为主线。
 
 ## 术语
 
@@ -27,7 +27,7 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 ## 当前观察结构
 
-主线观察模式为 `observation_schema=pccm`。三个尺度由独立 CNN 分支编码：
+主线观察固定为 PCCM，不再保留可选 motion schema。三个尺度由独立 CNN 分支编码：
 
 | 尺度 | 世界范围 | 输出大小 | 每帧通道 |
 | --- | --- | --- | --- |
@@ -56,8 +56,9 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 7. 当前真实碰撞区域最后覆盖为 `1.0`，不能被 soft cap 降低。
 8. 场外区域不写成 PCCM 的硬危险，只由 playable mask 表示不可到达。
 9. 四面墙分别贡献软代价，因此角落会自然叠加。
-10. `reference` NumPy broadcasting 实现必须保留，并且目前仍是训练默认实现。
-11. ROI optimized 和 `auto` 仅作为精确实现及性能研究保留，不得为了“优化”删除 reference。
+10. 上方 70% 区域从分界线的 0 线性增加到顶部的 0.3，并与墙壁代价软叠加。
+11. `reference` NumPy broadcasting 实现必须保留，并且目前仍是训练默认实现。
+12. ROI optimized 和 `auto` 仅作为精确实现及性能研究保留，不得为了“优化”删除 reference。
 
 未来轨迹在普通慢速子弹上可能不明显。例如 `145 px/s` 的子弹在五帧内只移动约 `12 px`；`600 px/s` 的诊断弹会移动约 `50 px`。这不是预测失效。
 
@@ -73,19 +74,17 @@ action change penalty =  0.0
 
 环境还会根据 `config.json` 叠加：
 
-- PCCM transition shaping：`weight * (previous_cost - current_cost)`；碰撞帧跳过。
-- 持续贴墙惩罚 `wall_state_penalty_weight`。
-- 墙壁势差 shaping `wall_shaping_weight`。
-- 上方区域持续惩罚 `upper_field_penalty_weight`。
+- PCCM state penalty：`weight * current_cost`；当前主线权重为 `0.05`，碰撞帧跳过。
+- PCCM transition shaping：`weight * (previous_cost - current_cost)`；代码保留用于对照，当前主线权重为 `0`。
 - 旧 danger potential shaping；当前主线通常关闭。
 
 不要只阅读 `compute_frame_reward()` 就断言完整奖励函数，因为额外 shaping 在 `rl/touhou_rl_env.py` 中组合。修改奖励前必须同时检查这两个文件和当前 `config.json`。
 
-默认训练和评估中，第一次有效碰撞结束 episode。`training_invincible` 是失败实验留下的选项，不是推荐主线；不要默认启用。
+默认训练和评估中，第一次有效碰撞结束 episode。
 
 ## 当前训练原则
 
-- 新观察形状或 schema 变更后必须从头训练，旧 checkpoint 不能静默加载。
+- 新观察形状变更后必须从头训练，旧 checkpoint 不能静默加载。
 - 新实验不得覆盖旧 checkpoint 或 CSV。
 - `config.json` 是版本化实验基线，命令行参数只用于临时覆盖。
 - 每个 CSV 首行保存最终生效的 `# run_config`。

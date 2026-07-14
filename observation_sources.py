@@ -23,7 +23,6 @@ def scene_to_observation_state(
                 radius=bullet.collider.radius,
                 vx=velocity.x(),
                 vy=velocity.y(),
-                speed=bullet.speed,
             )
         )
 
@@ -35,7 +34,6 @@ def scene_to_observation_state(
         previous_position = previous_enemy_positions.get(id(enemy), current_position)
         vx = (current_position[0] - previous_position[0]) / dt
         vy = (current_position[1] - previous_position[1]) / dt
-        speed = (vx * vx + vy * vy) ** 0.5
         next_enemy_positions[id(enemy)] = current_position
         bullets.append(
             BulletState(
@@ -44,7 +42,6 @@ def scene_to_observation_state(
                 radius=enemy.collider.radius,
                 vx=vx,
                 vy=vy,
-                speed=speed,
             )
         )
 

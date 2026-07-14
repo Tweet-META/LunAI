@@ -46,7 +46,6 @@ def make_bullets(seed: int, count: int) -> list[BulletState]:
                 radius=radius,
                 vx=float(np.cos(angle) * speed),
                 vy=float(np.sin(angle) * speed),
-                speed=speed,
             )
         )
     return bullets

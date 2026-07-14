@@ -11,12 +11,12 @@ import numpy as np
 import torch
 
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from rl.observation_utils import flatten_observation, observation_dim, validate_flat_observation
-from rl.ppo_agent import PPOAgent, PPOConfig, load_ppo_config
+from rl.legacy.observation_utils import flatten_observation, observation_dim, validate_flat_observation
+from rl.legacy.ppo_agent import PPOAgent, PPOConfig, load_ppo_config
 from rl.touhou_rl_env import TouhouRLEnv
 
 
@@ -273,12 +273,6 @@ def train(args: argparse.Namespace) -> None:
         level_spawn_time_jitter=args.level_spawn_time_jitter,
         random_player_start=args.random_player_start,
         player_start_margin=args.player_start_margin,
-        reward_gamma=args.gamma,
-        danger_shaping_enabled=args.danger_shaping_enabled,
-        wall_shaping_weight=args.wall_shaping_weight,
-        wall_state_penalty_weight=args.wall_state_penalty_weight,
-        upper_field_penalty_weight=args.upper_field_penalty_weight,
-        lower_field_threshold=args.lower_field_threshold,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -402,11 +396,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--minibatch-size", type=int, default=256)
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--danger-shaping", action=argparse.BooleanOptionalAction, default=True, dest="danger_shaping_enabled")
-    parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
-    parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--lower-field-threshold", type=float, default=0.70)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--learning-rate-final", type=float, default=-1.0)

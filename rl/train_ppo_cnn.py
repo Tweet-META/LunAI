@@ -16,7 +16,7 @@ from rl.cnn_observation_utils import CNNObservation, cnn_observation, cnn_observ
 from rl.parallel_touhou_env import ParallelTouhouEnvs
 from rl.ppo_cnn_agent import CNNPPOAgent, CNNPPOConfig, load_cnn_ppo_config
 from rl.touhou_rl_env import TouhouRLEnv
-from rl.train_ppo import (
+from rl.training_utils import (
     append_log,
     compute_gae,
     ensure_parent_dir,
@@ -31,7 +31,7 @@ from rl.train_ppo import (
 
 PCCM_LOG_COLUMNS = (
     "mean_local_pccm",
-    "pccm_shaping_reward",
+    "pccm_state_penalty",
     "wall_time_ratio",
     "action_stay",
     "action_up",
@@ -52,7 +52,7 @@ def episode_diagnostic_values(info: dict[str, object]) -> list[object]:
         action_counts = [0] * 9
     return [
         f"{float(info.get('mean_local_pccm', 0.0)):.6f}",
-        f"{float(info.get('episode_pccm_shaping_reward', 0.0)):.6f}",
+        f"{float(info.get('episode_pccm_state_penalty', 0.0)):.6f}",
         f"{float(info.get('wall_time_ratio', 0.0)):.6f}",
         *[int(count) for count in action_counts],
     ]
@@ -77,31 +77,30 @@ def validate_checkpoint_shapes(
     shapes: dict[str, tuple[int, ...]],
     frame_stack: int,
     frame_stack_interval: int,
-    observation_schema: str,
     args_pccm_prediction_frames: int = 5,
     args_pccm_halo_width: float = 24.0,
     args_pccm_wall_margin: float = 0.12,
+    args_pccm_upper_field_threshold: float = 0.70,
+    args_pccm_upper_field_cost: float = 0.30,
 ) -> None:
-    if config.observation_schema != observation_schema:
+    expected_pccm = (
+        config.pccm_prediction_frames,
+        config.pccm_halo_width,
+        config.pccm_wall_margin,
+        config.pccm_upper_field_threshold,
+        config.pccm_upper_field_cost,
+    )
+    environment_pccm = (
+        args_pccm_prediction_frames,
+        args_pccm_halo_width,
+        args_pccm_wall_margin,
+        args_pccm_upper_field_threshold,
+        args_pccm_upper_field_cost,
+    )
+    if expected_pccm != environment_pccm:
         raise ValueError(
-            f"Checkpoint observation_schema={config.observation_schema}, "
-            f"but environment observation_schema={observation_schema}."
+            f"Checkpoint PCCM settings={expected_pccm}, but environment PCCM settings={environment_pccm}."
         )
-    if observation_schema == "pccm":
-        expected_pccm = (
-            config.pccm_prediction_frames,
-            config.pccm_halo_width,
-            config.pccm_wall_margin,
-        )
-        environment_pccm = (
-            args_pccm_prediction_frames,
-            args_pccm_halo_width,
-            args_pccm_wall_margin,
-        )
-        if expected_pccm != environment_pccm:
-            raise ValueError(
-                f"Checkpoint PCCM settings={expected_pccm}, but environment PCCM settings={environment_pccm}."
-            )
     if config.frame_stack != frame_stack:
         raise ValueError(
             f"Checkpoint frame_stack={config.frame_stack}, but --frame-stack={frame_stack}."
@@ -134,18 +133,12 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "player_start_margin": args.player_start_margin,
         "frame_stack": args.frame_stack,
         "frame_stack_interval": args.frame_stack_interval,
-        "reward_gamma": args.gamma,
-        "danger_shaping_enabled": args.danger_shaping_enabled,
-        "wall_shaping_weight": args.wall_shaping_weight,
-        "wall_state_penalty_weight": args.wall_state_penalty_weight,
-        "upper_field_penalty_weight": args.upper_field_penalty_weight,
-        "lower_field_threshold": args.lower_field_threshold,
-        "observation_schema": args.observation_schema,
-        "pccm_shaping_weight": args.pccm_shaping_weight,
+        "pccm_state_penalty_weight": args.pccm_state_penalty_weight,
         "pccm_prediction_frames": args.pccm_prediction_frames,
         "pccm_halo_width": args.pccm_halo_width,
         "pccm_wall_margin": args.pccm_wall_margin,
-        # "training_invincible": True,
+        "pccm_upper_field_threshold": args.pccm_upper_field_threshold,
+        "pccm_upper_field_cost": args.pccm_upper_field_cost,
     }
 
 
@@ -159,10 +152,11 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
             shapes,
             args.frame_stack,
             args.frame_stack_interval,
-            args.observation_schema,
             args.pccm_prediction_frames,
             args.pccm_halo_width,
             args.pccm_wall_margin,
+            args.pccm_upper_field_threshold,
+            args.pccm_upper_field_cost,
         )
         config.gamma = args.gamma
         config.gae_lambda = args.gae_lambda
@@ -186,10 +180,11 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
                 yellow_shape=shapes["yellow"],
                 blue_shape=shapes["blue"],
                 player_dim=shapes["player"][0],
-                observation_schema=args.observation_schema,
                 pccm_prediction_frames=args.pccm_prediction_frames,
                 pccm_halo_width=args.pccm_halo_width,
                 pccm_wall_margin=args.pccm_wall_margin,
+                pccm_upper_field_threshold=args.pccm_upper_field_threshold,
+                pccm_upper_field_cost=args.pccm_upper_field_cost,
                 frame_stack=args.frame_stack,
                 frame_stack_interval=args.frame_stack_interval,
                 action_dim=9,
@@ -280,7 +275,7 @@ def collect_rollout(
     ):
         action, log_prob, value = agent.select_action(state)
         next_observation, reward, done, info = env.step(action)
-        next_state = cnn_observation(next_observation, env.get_map_history(), args.observation_schema)
+        next_state = cnn_observation(next_observation, env.get_map_history())
 
         rollout["states"].append(state)
         rollout["actions"].append(action)
@@ -335,7 +330,7 @@ def collect_rollout(
             counters["episode_frame_steps"] = 0
             if counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
                 observation = env.reset(seed=args.seed + counters["episode"])
-                state = cnn_observation(observation, env.get_map_history(), args.observation_schema)
+                state = cnn_observation(observation, env.get_map_history())
 
     counters["episode_reward"] = episode_reward
     counters["episode_collisions"] = episode_collisions
@@ -465,7 +460,7 @@ def train_parallel(args: argparse.Namespace) -> None:
         model_path = Path(args.model_path)
         write_log_header(
             log_path,
-            {**vars(args), "training_invincible": False},
+            vars(args),
             include_env_id=True,
             extra_columns=PCCM_LOG_COLUMNS,
         )
@@ -552,37 +547,29 @@ def train(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
-        reward_gamma=args.gamma,
-        danger_shaping_enabled=args.danger_shaping_enabled,
-        wall_shaping_weight=args.wall_shaping_weight,
-        wall_state_penalty_weight=args.wall_state_penalty_weight,
-        upper_field_penalty_weight=args.upper_field_penalty_weight,
-        lower_field_threshold=args.lower_field_threshold,
-        observation_schema=args.observation_schema,
-        pccm_shaping_weight=args.pccm_shaping_weight,
+        pccm_state_penalty_weight=args.pccm_state_penalty_weight,
         pccm_prediction_frames=args.pccm_prediction_frames,
         pccm_halo_width=args.pccm_halo_width,
         pccm_wall_margin=args.pccm_wall_margin,
+        pccm_upper_field_threshold=args.pccm_upper_field_threshold,
+        pccm_upper_field_cost=args.pccm_upper_field_cost,
         render_debug=args.render_debug,
-        # training_invincible=True,
     )
     first_observation = env.reset(seed=args.seed)
-    shapes = cnn_observation_shapes(first_observation, env.get_map_history(), args.observation_schema)
+    shapes = cnn_observation_shapes(first_observation, env.get_map_history())
     agent = create_agent(args, shapes)
 
     log_path = Path(args.log_path)
     model_path = Path(args.model_path)
-    # Keep the old metadata form beside the terminal training record.
-    # write_log_header(log_path, {**vars(args), "training_invincible": True})
     write_log_header(
         log_path,
-        {**vars(args), "training_invincible": False},
+        vars(args),
         include_env_id=True,
         extra_columns=PCCM_LOG_COLUMNS,
     )
     ensure_parent_dir(model_path)
 
-    state = cnn_observation(first_observation, env.get_map_history(), args.observation_schema)
+    state = cnn_observation(first_observation, env.get_map_history())
     counters = {
         "episode": 1,
         "update": 0,
@@ -655,16 +642,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--minibatch-size", type=int, default=256)
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--danger-shaping", action=argparse.BooleanOptionalAction, default=True, dest="danger_shaping_enabled")
-    parser.add_argument("--wall-shaping-weight", type=float, default=0.01)
-    parser.add_argument("--wall-state-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--upper-field-penalty-weight", type=float, default=0.0)
-    parser.add_argument("--lower-field-threshold", type=float, default=0.70)
-    parser.add_argument("--observation-schema", choices=("motion", "pccm"), default="pccm")
-    parser.add_argument("--pccm-shaping-weight", type=float, default=0.05)
+    parser.add_argument("--pccm-state-penalty-weight", type=float, default=0.0)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
     parser.add_argument("--pccm-halo-width", type=float, default=24.0)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
+    parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
+    parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--learning-rate-final", type=float, default=-1.0)
