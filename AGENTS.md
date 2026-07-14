@@ -64,21 +64,16 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 ## 当前奖励结构
 
-基础奖励定义在 `rl/reward.py`，每个真实游戏帧计算一次：
+完整奖励定义在 `rl/reward.py`，每个真实游戏帧计算一次：
 
 ```text
 survival reward       = +0.1
 collision penalty     = -30.0（发生碰撞时）
 action change penalty =  0.0
+PCCM state penalty    = -0.05 * local PCCM cost
 ```
 
-环境还会根据 `config.json` 叠加：
-
-- PCCM state penalty：`weight * current_cost`；当前主线权重为 `0.05`，碰撞帧跳过。
-- PCCM transition shaping：`weight * (previous_cost - current_cost)`；代码保留用于对照，当前主线权重为 `0`。
-- 旧 danger potential shaping；当前主线通常关闭。
-
-不要只阅读 `compute_frame_reward()` 就断言完整奖励函数，因为额外 shaping 在 `rl/touhou_rl_env.py` 中组合。修改奖励前必须同时检查这两个文件和当前 `config.json`。
+PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。奖励数值只在 `rl/reward.py` 修改；`rl/touhou_rl_env.py` 只调用完整奖励函数并记录各项统计。
 
 默认训练和评估中，第一次有效碰撞结束 episode。
 
@@ -86,7 +81,7 @@ action change penalty =  0.0
 
 - 新观察形状变更后必须从头训练，旧 checkpoint 不能静默加载。
 - 新实验不得覆盖旧 checkpoint 或 CSV。
-- `config.json` 是版本化实验基线，命令行参数只用于临时覆盖。
+- `config.json` 只保存当前实验有意覆盖的参数；省略项使用脚本默认值，命令行参数用于临时覆盖。
 - 每个 CSV 首行保存最终生效的 `# run_config`。
 - 正式训练关闭 `render` 和 `render_debug`；渲染只用于短暂验收。
 - 先在诊断课程验证最短链路，再进入复杂随机弹幕。
@@ -144,8 +139,8 @@ python tools/benchmark_pccm_level.py
 - `observation_sources.py`：从 pygame scene 提取玩家、敌弹和敌人状态。
 - `rl/cnn_observation_utils.py`：多帧、多通道 CNN 输入堆叠。
 - `rl/ppo_cnn_agent.py`：三分支 CNN PPO 网络及 checkpoint 元数据。
-- `rl/touhou_rl_env.py`：环境推进、奖励组合、frame history 和渲染。
-- `rl/reward.py`：基础奖励和 shaping 函数。
+- `rl/touhou_rl_env.py`：环境推进、奖励统计、frame history 和渲染。
+- `rl/reward.py`：完整奖励数值与计算函数。
 - `config.json`：当前实验配置。
 - `training_logs/plots/reward_and_training_history.md`：按时间记录的实验历史。
 - `tools/visualization_debug.py`：完整游戏区域上的合成 PCCM 调试图。

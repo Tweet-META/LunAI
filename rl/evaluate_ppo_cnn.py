@@ -38,7 +38,6 @@ def evaluate(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
-        pccm_state_penalty_weight=args.pccm_state_penalty_weight,
         pccm_prediction_frames=config.pccm_prediction_frames,
         pccm_halo_width=config.pccm_halo_width,
         pccm_wall_margin=config.pccm_wall_margin,
@@ -133,7 +132,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
-    parser.add_argument("--pccm-state-penalty-weight", type=float, default=0.05)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--print-actions", action="store_true")
     parser.add_argument("--print-action-probs", action="store_true")

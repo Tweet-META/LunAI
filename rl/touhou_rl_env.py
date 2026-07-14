@@ -14,7 +14,6 @@ import pygame
 from rl.reward import (
     compute_frame_reward,
     local_pccm_cost,
-    pccm_state_penalty,
     wall_proximity,
 )
 from rl.cnn_observation_utils import cnn_map_keys
@@ -52,7 +51,6 @@ class TouhouRLEnv:
         player_start_margin: float = 80.0,
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
-        pccm_state_penalty_weight: float = 0.0,
         pccm_prediction_frames: int = 5,
         pccm_halo_width: float = 24.0,
         pccm_wall_margin: float = 0.12,
@@ -81,12 +79,7 @@ class TouhouRLEnv:
         self.frame_stack = int(frame_stack)
         self.frame_stack_interval = int(frame_stack_interval)
         self.map_history_size = 1 + (self.frame_stack - 1) * self.frame_stack_interval
-        if float(pccm_state_penalty_weight) < 0.0:
-            raise ValueError(
-                f"PCCM state penalty weight must be non-negative, got {pccm_state_penalty_weight}."
-            )
         self.MAP_KEYS = cnn_map_keys()
-        self.pccm_state_penalty_weight = float(pccm_state_penalty_weight)
         self.pccm_prediction_frames = int(pccm_prediction_frames)
         self.pccm_halo_width = float(pccm_halo_width)
         self.pccm_wall_margin = float(pccm_wall_margin)
@@ -135,9 +128,7 @@ class TouhouRLEnv:
         self.episode_reward = 0.0
         self.last_collided = False
         self.last_pccm_cost = 0.0
-        self.last_pccm_state_penalty = 0.0
         self.episode_pccm_cost_sum = 0.0
-        self.episode_pccm_state_penalty = 0.0
         self.episode_wall_frames = 0
         self.episode_action_counts = np.zeros(len(self.ACTIONS), dtype=np.int64)
 
@@ -186,9 +177,7 @@ class TouhouRLEnv:
         self.episode_reward = 0.0
         self.last_collided = False
         self.last_pccm_cost = local_pccm_cost(self.last_observation)
-        self.last_pccm_state_penalty = 0.0
         self.episode_pccm_cost_sum = 0.0
-        self.episode_pccm_state_penalty = 0.0
         self.episode_wall_frames = 0
         self.episode_action_counts.fill(0)
         return self.last_observation
@@ -213,7 +202,6 @@ class TouhouRLEnv:
         self.previous_action = action
         self.steps += 1
         self.episode_action_counts[action] += 1
-        action_pccm_state_penalty = 0.0
 
         for _ in range(self.action_repeat):
             self.scene.player.slow = False
@@ -226,14 +214,12 @@ class TouhouRLEnv:
             collided = self.scene.player.collided_this_frame
             contact_frames += int(collided)
             done = self._is_done(collided)
-            frame_reward = compute_frame_reward(action, previous_action_for_reward, collided)
-            state_penalty = pccm_state_penalty(
+            frame_reward = compute_frame_reward(
                 observation,
+                action,
+                previous_action_for_reward,
                 collided,
-                self.pccm_state_penalty_weight,
             )
-            frame_reward -= state_penalty
-            action_pccm_state_penalty += state_penalty
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp
             self.last_observation = observation
@@ -241,9 +227,7 @@ class TouhouRLEnv:
             self.episode_reward += frame_reward
             self.last_collided = collided
             self.last_pccm_cost = local_pccm_cost(observation)
-            self.last_pccm_state_penalty = state_penalty
             self.episode_pccm_cost_sum += self.last_pccm_cost
-            self.episode_pccm_state_penalty += state_penalty
             self.episode_wall_frames += int(wall_proximity(observation) > 0.0)
             previous_action_for_reward = action
             if self.render_mode == "human":
@@ -264,8 +248,6 @@ class TouhouRLEnv:
             "level_file": self.current_level_file,
             "local_pccm_cost": self.last_pccm_cost,
             "mean_local_pccm": self.episode_pccm_cost_sum / max(1, self.frame_steps),
-            "pccm_state_penalty": action_pccm_state_penalty,
-            "episode_pccm_state_penalty": self.episode_pccm_state_penalty,
             "wall_time_ratio": self.episode_wall_frames / max(1, self.frame_steps),
             "action_counts": self.episode_action_counts.tolist(),
         }

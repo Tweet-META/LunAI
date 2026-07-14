@@ -33,7 +33,7 @@ CNN PPO main training path:
 python rl/train_ppo_cnn.py --config config.json
 ```
 
-`config.json` is the versioned baseline for the current experiment. Command-line values override the file, so a temporary budget change is concise:
+`config.json` stores only intentional overrides for the current experiment. Omitted settings use the training script defaults, while command-line values override both. Reward values are kept together in `rl/reward.py`.
 
 ```powershell
 python rl/train_ppo_cnn.py --config config.json --max-total-frame-steps 1000000

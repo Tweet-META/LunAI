@@ -31,7 +31,6 @@ from rl.training_utils import (
 
 PCCM_LOG_COLUMNS = (
     "mean_local_pccm",
-    "pccm_state_penalty",
     "wall_time_ratio",
     "action_stay",
     "action_up",
@@ -52,7 +51,6 @@ def episode_diagnostic_values(info: dict[str, object]) -> list[object]:
         action_counts = [0] * 9
     return [
         f"{float(info.get('mean_local_pccm', 0.0)):.6f}",
-        f"{float(info.get('episode_pccm_state_penalty', 0.0)):.6f}",
         f"{float(info.get('wall_time_ratio', 0.0)):.6f}",
         *[int(count) for count in action_counts],
     ]
@@ -133,7 +131,6 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "player_start_margin": args.player_start_margin,
         "frame_stack": args.frame_stack,
         "frame_stack_interval": args.frame_stack_interval,
-        "pccm_state_penalty_weight": args.pccm_state_penalty_weight,
         "pccm_prediction_frames": args.pccm_prediction_frames,
         "pccm_halo_width": args.pccm_halo_width,
         "pccm_wall_margin": args.pccm_wall_margin,
@@ -547,7 +544,6 @@ def train(args: argparse.Namespace) -> None:
         player_start_margin=args.player_start_margin,
         frame_stack=args.frame_stack,
         frame_stack_interval=args.frame_stack_interval,
-        pccm_state_penalty_weight=args.pccm_state_penalty_weight,
         pccm_prediction_frames=args.pccm_prediction_frames,
         pccm_halo_width=args.pccm_halo_width,
         pccm_wall_margin=args.pccm_wall_margin,
@@ -642,7 +638,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--minibatch-size", type=int, default=256)
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--pccm-state-penalty-weight", type=float, default=0.0)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
     parser.add_argument("--pccm-halo-width", type=float, default=24.0)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
