@@ -27,7 +27,7 @@ class PlayerState:
 class ObservationConfig:
     playfield_width: int = 600
     playfield_height: int = 700
-    blue_grid: tuple[int, int] = (6, 6)
+    blue_grid: tuple[int, int] = (8, 8)
     yellow_size: tuple[int, int] = (320, 320)
     yellow_grid: tuple[int, int] = (16, 16)
     red_size: tuple[int, int] = (128, 128)
@@ -718,7 +718,7 @@ class ObservationBuilder:
             player.radius,
             full_window,
             cfg.blue_grid,
-            (12, 12),
+            (16, 16),
             cfg.playfield_width,
             cfg.playfield_height,
             cfg.pccm_prediction_frames,

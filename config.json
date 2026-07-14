@@ -51,5 +51,5 @@
   "log_path": "training_logs/lunai_v8_pccm_test1.csv",
   "device": "auto",
   "render": false,
-  "render_debug": false
+  "render_debug": true
 }

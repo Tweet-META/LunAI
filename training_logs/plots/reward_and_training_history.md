@@ -1035,7 +1035,8 @@ PCCM 预测未来 5 帧，halo_width=24，wall_margin=0.12
 性能与验证：
 ```text
 红区硬 occupancy 保持 64x64
-平滑 PCCM 内部采样：红 32x32 后双线性放大，黄 32x32 -> 16x16，蓝 12x12 -> 6x6
+平滑 PCCM 内部采样最初为：红 32x32 后双线性放大，黄 32x32 -> 16x16，蓝 12x12 -> 6x6
+2026-07-14 将蓝区提高到 8x8，内部采样同步提高到 16x16，以增强远距离弹幕方向和分布信息
 level_6、最多 86 个危险体时，本机 PCCM 环境约 65.3 FPS
 保留全采样 NumPy broadcasting 作为 reference，新增精确浮点 ROI 实现
 纯 PCCM 微基准中蓝区 12x12 使用 reference 更快，黄区和红区 32x32 使用 ROI 更快

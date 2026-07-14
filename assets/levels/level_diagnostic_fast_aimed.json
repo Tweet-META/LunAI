@@ -1,0 +1,21 @@
+{
+  "length": 12.0,
+  "name": "diagnostic_fast_aimed",
+  "description": "Repeated 600 px/s aimed bullets for visual PCCM prediction checks.",
+  "enemies": [
+    {
+      "start_position": [300, 100],
+      "trajectory": [[300, 100], [300, 100], [300, 100], [300, 100], [300, 100]],
+      "speed": 0.2,
+      "sprite": {"size": [24, 19], "path": ["assets", "sprites", "entities", "fairy_0.png"]},
+      "collider": {"radius": 15, "offset": [0, 0]},
+      "hp": 99999,
+      "attacks": [
+        ["wide_cone", 1, 10, [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0]], "player", 600, 0, 0.05, 0.2, 0]
+      ],
+      "drop": {"list": ["nothing"], "probabilities": [100]},
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

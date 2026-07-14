@@ -31,7 +31,7 @@ def create_builder(implementation: str) -> ObservationBuilder:
         ObservationConfig(
             playfield_width=GAME_ZONE[2],
             playfield_height=GAME_ZONE[3],
-            blue_grid=(6, 6),
+            blue_grid=(8, 8),
             yellow_size=(320, 320),
             yellow_grid=(16, 16),
             red_size=(128, 128),

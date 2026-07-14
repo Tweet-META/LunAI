@@ -23,7 +23,7 @@ from observation_builder import (  # noqa: E402
 
 
 SCALE_CASES = (
-    ("blue", (0, 0, 600, 700), (6, 6), (12, 12)),
+    ("blue", (0, 0, 600, 700), (8, 8), (16, 16)),
     ("yellow", centered_window(300.0, 560.0, 320, 320), (16, 16), (32, 32)),
     ("red", centered_window(300.0, 560.0, 128, 128), (64, 64), (32, 32)),
 )
@@ -78,7 +78,7 @@ def consistency_metrics(
 
     for player_x, player_y in player_positions:
         scale_cases = (
-            ((0, 0, 600, 700), (12, 12)),
+            ((0, 0, 600, 700), (16, 16)),
             (centered_window(float(player_x), float(player_y), 320, 320), (32, 32)),
             (centered_window(float(player_x), float(player_y), 128, 128), (32, 32)),
         )

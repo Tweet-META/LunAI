@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -116,6 +117,10 @@ def draw_pause_label(screen: pygame.Surface, font: pygame.font.Font) -> None:
 
 # Run the live game with observation overlays.
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Show one live multi-scale observation map.")
+    parser.add_argument("--level-file", default="level_1.json")
+    args = parser.parse_args()
+
     pygame.init()
     pygame.mixer.pre_init(48000, -16, 2, 4096)
     pygame.mixer.init()
@@ -126,21 +131,21 @@ def main() -> None:
 
     from assets.scripts.scenes.GameScene import GameScene
 
-    scene = GameScene()
+    scene = GameScene(level_file=args.level_file)
     pause_font = pygame.font.Font(None, 48)
 
     builder = ObservationBuilder(
         ObservationConfig(
             playfield_width=GAME_ZONE[2],
             playfield_height=GAME_ZONE[3],
-            blue_grid=(6, 6),
+            blue_grid=(8, 8),
             yellow_size=(320, 320),
             yellow_grid=(16, 16),
             red_size=(128, 128),
             red_map=(64, 64),
             max_speed=500.0,
             observation_schema="pccm",
-            pccm_debug=True,
+            pccm_debug=False,
         )
     )
 
@@ -159,7 +164,7 @@ def main() -> None:
                 paused = not paused
 
         if not isinstance(scene, GameScene):
-            scene = GameScene()
+            scene = GameScene(level_file=args.level_file)
             delta_time = 1 / FPS
             previous_action = 0
             previous_enemy_positions = {}

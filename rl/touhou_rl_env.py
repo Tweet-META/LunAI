@@ -134,7 +134,7 @@ class TouhouRLEnv:
             ObservationConfig(
                 playfield_width=GAME_ZONE[2],
                 playfield_height=GAME_ZONE[3],
-                blue_grid=(6, 6),
+                blue_grid=(8, 8),
                 yellow_size=(320, 320),
                 yellow_grid=(16, 16),
                 red_size=(128, 128),
@@ -144,7 +144,7 @@ class TouhouRLEnv:
                 pccm_prediction_frames=self.pccm_prediction_frames,
                 pccm_halo_width=self.pccm_halo_width,
                 pccm_wall_margin=self.pccm_wall_margin,
-                pccm_debug=self.render_debug,
+                pccm_debug=False,
             )
         )
 
@@ -421,7 +421,7 @@ class TouhouRLEnv:
 
     # Draw live reward information on the game screen.
     def _draw_reward_panel(self) -> None:
-        font = pygame.font.Font(None, 28)
+        font = pygame.font.Font(None, 24 if self.render_debug else 28)
         lines = [
             f"step reward: {self.last_reward:+.4f}",
             f"total reward: {self.episode_reward:+.2f}",
@@ -430,7 +430,7 @@ class TouhouRLEnv:
             f"hp: {self.scene.player.hp}",
             f"collided: {self.last_collided}",
         ]
-        x = self.GAME_ZONE[0] + self.GAME_ZONE[2] + 50
+        x = self.GAME_ZONE[0] + self.GAME_ZONE[2] + (330 if self.render_debug else 50)
         y = 560
         for index, line in enumerate(lines):
             label = font.render(line, True, (255, 255, 255)).convert_alpha()

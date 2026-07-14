@@ -137,27 +137,69 @@ def draw_player_hitbox_marker(screen: pygame.Surface, rect: pygame.Rect, observa
     pygame.draw.circle(screen, BLACK, (marker_x, marker_y), 6, 2)
 
 
-# Draw six debug panels for the active observation schema.
+# Project one world-space window into a full-field PCCM panel.
+def _window_panel_rect(
+    window: np.ndarray,
+    field_window: np.ndarray,
+    panel_size: tuple[int, int],
+) -> pygame.Rect:
+    x1, y1, x2, y2 = [float(v) for v in window]
+    field_x1, field_y1, field_x2, field_y2 = [float(v) for v in field_window]
+    field_width = max(1.0, field_x2 - field_x1)
+    field_height = max(1.0, field_y2 - field_y1)
+    left = round((x1 - field_x1) / field_width * panel_size[0])
+    top = round((y1 - field_y1) / field_height * panel_size[1])
+    width = max(1, round((x2 - x1) / field_width * panel_size[0]))
+    height = max(1, round((y2 - y1) / field_height * panel_size[1]))
+    return pygame.Rect(left, top, width, height)
+
+
+# Draw one full-field PCCM with higher-resolution local maps layered on top.
+def draw_full_pccm_panel(
+    screen: pygame.Surface,
+    observation: dict[str, np.ndarray],
+    rect: pygame.Rect,
+) -> None:
+    panel = pygame.Surface(rect.size)
+    panel_rect = panel.get_rect()
+    field_window = observation["_blue_window"]
+    draw_heatmap_panel(panel, observation["blue_pccm"], panel_rect, (70, 130, 255))
+
+    layers = (
+        (
+            observation["yellow_pccm"],
+            observation["yellow_valid"],
+            observation["_yellow_window"],
+            (255, 220, 70),
+        ),
+        (
+            observation["red_pccm"],
+            observation["red_valid"],
+            observation["_red_window"],
+            (255, 70, 70),
+        ),
+    )
+    for values, valid_mask, window, tint in layers:
+        layer_rect = _window_panel_rect(window, field_window, rect.size)
+        draw_heatmap_panel(panel, values, layer_rect, tint, valid_mask=valid_mask)
+        visible_border = layer_rect.clip(panel_rect)
+        if visible_border.width > 0 and visible_border.height > 0:
+            pygame.draw.rect(panel, BLACK, visible_border, 2)
+
+    player_features = observation["player_features"]
+    marker_x = int(np.clip(round(float(player_features[0]) * rect.width), 0, rect.width - 1))
+    marker_y = int(np.clip(round(float(player_features[1]) * rect.height), 0, rect.height - 1))
+    pygame.draw.circle(panel, WHITE, (marker_x, marker_y), 4)
+    pygame.draw.circle(panel, BLACK, (marker_x, marker_y), 5, 2)
+    pygame.draw.rect(panel, BLACK, panel_rect, 2)
+    screen.blit(panel, rect.topleft)
+
+
+# Draw one PCCM overview or the legacy motion-schema panels.
 def draw_observation_panels(screen: pygame.Surface, observation: dict[str, np.ndarray], origin: tuple[int, int] = (690, 420)) -> None:
     x, y = origin
     if "red_pccm" in observation:
-        panels = (
-            ("red_occupancy", (255, 70, 70)),
-            ("_red_pccm_bullet", (255, 180, 70)),
-            ("_red_pccm_prediction", (180, 90, 255)),
-            ("_red_pccm_wall", (80, 180, 255)),
-            ("red_pccm", (255, 70, 160)),
-            ("red_valid", (100, 220, 140)),
-        )
-        for index, (key, tint) in enumerate(panels):
-            row = index // 2
-            col = index % 2
-            rect = pygame.Rect(x + col * 140, y + row * 145, 120, 120)
-            values = observation.get(key, np.zeros_like(observation["red_pccm"]))
-            valid_mask = observation["red_valid"] if key != "red_valid" else None
-            draw_heatmap_panel(screen, values, rect, tint, valid_mask=valid_mask)
-            if key in {"red_occupancy", "red_pccm"}:
-                draw_player_hitbox_marker(screen, rect, observation)
+        draw_full_pccm_panel(screen, observation, pygame.Rect(x, y, 260, 303))
         return
 
     draw_heatmap_panel(screen, observation["blue_density"], pygame.Rect(x, y, 120, 120), (70, 130, 255))
