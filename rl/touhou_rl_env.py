@@ -12,6 +12,7 @@ import numpy as np
 import pygame
 
 from rl.reward import (
+    blocked_movement_ratio,
     compute_frame_reward,
     local_pccm_cost,
     wall_proximity,
@@ -52,7 +53,7 @@ class TouhouRLEnv:
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
         pccm_prediction_frames: int = 5,
-        pccm_halo_width: float = 24.0,
+        pccm_halo_width: float = 32.0,
         pccm_wall_margin: float = 0.12,
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
@@ -128,7 +129,9 @@ class TouhouRLEnv:
         self.episode_reward = 0.0
         self.last_collided = False
         self.last_pccm_cost = 0.0
+        self.last_blocked_movement_ratio = 0.0
         self.episode_pccm_cost_sum = 0.0
+        self.episode_blocked_movement_ratio_sum = 0.0
         self.episode_wall_frames = 0
         self.episode_action_counts = np.zeros(len(self.ACTIONS), dtype=np.int64)
 
@@ -177,7 +180,9 @@ class TouhouRLEnv:
         self.episode_reward = 0.0
         self.last_collided = False
         self.last_pccm_cost = local_pccm_cost(self.last_observation)
+        self.last_blocked_movement_ratio = 0.0
         self.episode_pccm_cost_sum = 0.0
+        self.episode_blocked_movement_ratio_sum = 0.0
         self.episode_wall_frames = 0
         self.episode_action_counts.fill(0)
         return self.last_observation
@@ -205,7 +210,21 @@ class TouhouRLEnv:
 
         for _ in range(self.action_repeat):
             self.scene.player.slow = False
+            player = self.scene.player
+            old_x = float(player.position.x())
+            old_y = float(player.position.y())
+            requested = direction.normalize() * player.speed * self.scene.delta_time
+            requested_dx = float(requested.x())
+            requested_dy = float(requested.y())
             self.scene.player.move(direction)
+            actual_dx = float(player.position.x()) - old_x
+            actual_dy = float(player.position.y()) - old_y
+            blocked_ratio = blocked_movement_ratio(
+                requested_dx,
+                requested_dy,
+                actual_dx,
+                actual_dy,
+            )
             self.scene.update(1 / self.FPS)
 
             self.frame_steps += 1
@@ -219,6 +238,7 @@ class TouhouRLEnv:
                 action,
                 previous_action_for_reward,
                 collided,
+                blocked_ratio,
             )
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp
@@ -227,7 +247,9 @@ class TouhouRLEnv:
             self.episode_reward += frame_reward
             self.last_collided = collided
             self.last_pccm_cost = local_pccm_cost(observation)
+            self.last_blocked_movement_ratio = blocked_ratio
             self.episode_pccm_cost_sum += self.last_pccm_cost
+            self.episode_blocked_movement_ratio_sum += blocked_ratio
             self.episode_wall_frames += int(wall_proximity(observation) > 0.0)
             previous_action_for_reward = action
             if self.render_mode == "human":
@@ -248,6 +270,8 @@ class TouhouRLEnv:
             "level_file": self.current_level_file,
             "local_pccm_cost": self.last_pccm_cost,
             "mean_local_pccm": self.episode_pccm_cost_sum / max(1, self.frame_steps),
+            "blocked_movement_ratio": self.last_blocked_movement_ratio,
+            "mean_blocked_movement_ratio": self.episode_blocked_movement_ratio_sum / max(1, self.frame_steps),
             "wall_time_ratio": self.episode_wall_frames / max(1, self.frame_steps),
             "action_counts": self.episode_action_counts.tolist(),
         }
@@ -360,6 +384,7 @@ class TouhouRLEnv:
             f"frame_steps: {self.frame_steps}",
             f"hp: {self.scene.player.hp}",
             f"collided: {self.last_collided}",
+            f"blocked ratio: {self.last_blocked_movement_ratio:.3f}",
         ]
         x = self.GAME_ZONE[0] + self.GAME_ZONE[2] + (330 if self.render_debug else 50)
         y = 560

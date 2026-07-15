@@ -11,14 +11,18 @@ from torch.nn import functional as F
 from rl.cnn_observation_utils import CNNObservation
 
 
+CURRENT_ARCHITECTURE_VERSION = 2
+
+
 @dataclass
 class CNNPPOConfig:
     red_shape: tuple[int, int, int]
     yellow_shape: tuple[int, int, int]
     blue_shape: tuple[int, int, int]
     player_dim: int
+    architecture_version: int = CURRENT_ARCHITECTURE_VERSION
     pccm_prediction_frames: int = 5
-    pccm_halo_width: float = 24.0
+    pccm_halo_width: float = 32.0
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30
@@ -43,31 +47,66 @@ class CNNActorCritic(nn.Module):
     # Create a multi-branch actor-critic network for map observations.
     def __init__(self, config: CNNPPOConfig):
         super().__init__()
-        self.red_encoder = nn.Sequential(
-            nn.Conv2d(config.red_shape[0], 16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((8, 8)),
-            nn.Flatten(),
-        )
-        self.yellow_encoder = nn.Sequential(
-            nn.Conv2d(config.yellow_shape[0], 16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((4, 4)),
-            nn.Flatten(),
-        )
-        self.blue_encoder = nn.Sequential(
-            nn.Conv2d(config.blue_shape[0], 16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((2, 2)),
-            nn.Flatten(),
-        )
+        if config.architecture_version == 1:
+            self.red_encoder = nn.Sequential(
+                nn.Conv2d(config.red_shape[0], 16, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(16, 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((8, 8)),
+                nn.Flatten(),
+            )
+            self.yellow_encoder = nn.Sequential(
+                nn.Conv2d(config.yellow_shape[0], 16, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((4, 4)),
+                nn.Flatten(),
+            )
+            self.blue_encoder = nn.Sequential(
+                nn.Conv2d(config.blue_shape[0], 16, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((2, 2)),
+                nn.Flatten(),
+            )
+            feature_dim = 32 * 8 * 8 + 16 * 4 * 4 + 16 * 2 * 2 + 32
+        elif config.architecture_version == 2:
+            self.red_encoder = nn.Sequential(
+                nn.Conv2d(config.red_shape[0], 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((8, 8)),
+                nn.Flatten(),
+            )
+            self.yellow_encoder = nn.Sequential(
+                nn.Conv2d(config.yellow_shape[0], 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((4, 4)),
+                nn.Flatten(),
+            )
+            self.blue_encoder = nn.Sequential(
+                nn.Conv2d(config.blue_shape[0], 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((2, 2)),
+                nn.Flatten(),
+            )
+            feature_dim = 64 * 8 * 8 + 64 * 4 * 4 + 64 * 2 * 2 + 32
+        else:
+            raise ValueError(f"Unsupported CNN architecture version: {config.architecture_version}.")
+
         self.player_encoder = nn.Sequential(
             nn.Linear(config.player_dim, 32),
             nn.ReLU(),
         )
-        feature_dim = 32 * 8 * 8 + 16 * 4 * 4 + 16 * 2 * 2 + 32
         self.trunk = nn.Sequential(
             nn.Linear(feature_dim, config.hidden_dim),
             nn.ReLU(),
@@ -273,8 +312,9 @@ class CNNPPOAgent:
 def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     checkpoint = torch.load(path, map_location="cpu")
     config_data = dict(checkpoint["config"])
+    config_data.setdefault("architecture_version", 1)
     config_data.setdefault("pccm_prediction_frames", 5)
-    config_data.setdefault("pccm_halo_width", 24.0)
+    config_data.setdefault("pccm_halo_width", 32.0)
     config_data.setdefault("pccm_wall_margin", 0.12)
     config_data.setdefault("pccm_upper_field_threshold", 0.70)
     # Old checkpoints were trained before the upper-field PCCM prior existed.

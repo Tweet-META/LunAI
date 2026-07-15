@@ -1,22 +1,19 @@
 {
   "episodes": 1000000,
-  "max_steps": 500,
+  "max_steps": 1000,
   "max_total_frame_steps": 100000,
   "action_repeat": 1,
   "frame_stack": 2,
   "frame_stack_interval": 2,
   "level_files": [
-    "level_diagnostic_empty.json",
-    "level_diagnostic_orb_v4_left.json",
-    "level_diagnostic_orb_v4_center.json",
-    "level_diagnostic_orb_v4_right.json"
+    "level_6.json"
   ],
   "seed": 0,
   "rollout_steps": 1024,
-  "learning_rate": 0.00012,
+  "learning_rate": 0.0003,
   "learning_rate_final": 0.00004,
   "entropy_coef": 0.004,
   "entropy_coef_final": 0.0015,
-  "model_path": "checkpoints/lunai_v8_pccm_stage1_orb_immediate.pt",
-  "log_path": "training_logs/lunai_v8_pccm_stage1_orb_immediate.csv"
+  "model_path": "checkpoints/lunai_v8.3.pt",
+  "log_path": "training_logs/lunai_v8.3.csv"
 }

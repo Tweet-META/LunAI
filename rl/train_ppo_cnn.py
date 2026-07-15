@@ -31,6 +31,7 @@ from rl.training_utils import (
 
 PCCM_LOG_COLUMNS = (
     "mean_local_pccm",
+    "mean_blocked_movement_ratio",
     "wall_time_ratio",
     "action_stay",
     "action_up",
@@ -51,6 +52,7 @@ def episode_diagnostic_values(info: dict[str, object]) -> list[object]:
         action_counts = [0] * 9
     return [
         f"{float(info.get('mean_local_pccm', 0.0)):.6f}",
+        f"{float(info.get('mean_blocked_movement_ratio', 0.0)):.6f}",
         f"{float(info.get('wall_time_ratio', 0.0)):.6f}",
         *[int(count) for count in action_counts],
     ]
@@ -76,7 +78,7 @@ def validate_checkpoint_shapes(
     frame_stack: int,
     frame_stack_interval: int,
     args_pccm_prediction_frames: int = 5,
-    args_pccm_halo_width: float = 24.0,
+    args_pccm_halo_width: float = 32.0,
     args_pccm_wall_margin: float = 0.12,
     args_pccm_upper_field_threshold: float = 0.70,
     args_pccm_upper_field_cost: float = 0.30,
@@ -144,6 +146,7 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
     if args.load_path:
         load_path = Path(args.load_path)
         config = load_cnn_ppo_config(str(load_path), device=args.device)
+        args.architecture_version = config.architecture_version
         validate_checkpoint_shapes(
             config,
             shapes,
@@ -177,6 +180,7 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
                 yellow_shape=shapes["yellow"],
                 blue_shape=shapes["blue"],
                 player_dim=shapes["player"][0],
+                architecture_version=args.architecture_version,
                 pccm_prediction_frames=args.pccm_prediction_frames,
                 pccm_halo_width=args.pccm_halo_width,
                 pccm_wall_margin=args.pccm_wall_margin,
@@ -639,7 +643,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
-    parser.add_argument("--pccm-halo-width", type=float, default=24.0)
+    parser.add_argument("--pccm-halo-width", type=float, default=32.0)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
@@ -653,6 +657,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
     parser.add_argument("--target-kl", type=float, default=0.03)
     parser.add_argument("--hidden-dim", type=int, default=128)
+    parser.add_argument("--architecture-version", type=int, choices=(1, 2), default=2)
     parser.add_argument("--save-interval", type=int, default=5)
     parser.add_argument("--load-path", type=str, default="")
     parser.add_argument("--model-path", type=str, default="checkpoints/ppo_cnn_baseline.pt")

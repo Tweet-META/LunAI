@@ -32,7 +32,7 @@ class ObservationConfig:
     red_size: tuple[int, int] = (128, 128)
     red_map: tuple[int, int] = (64, 64)
     pccm_prediction_frames: int = 5
-    pccm_halo_width: float = 24.0
+    pccm_halo_width: float = 32.0
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30

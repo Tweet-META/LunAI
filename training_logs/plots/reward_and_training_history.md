@@ -1050,3 +1050,237 @@ level_6 平均 68.92 个危险体时：reference 153.57 FPS，auto 152.24 FPS，
 单环境和双环境 PPO smoke training 均通过
 该条目仅记录实现完成，尚不是正式训练结果
 ```
+
+## 2026-07-14 12:48：lunai_v8_pccm_stage1_orb
+
+改动：
+
+```text
+PCCM 主线首次进行完整诊断训练
+训练关卡随机选择空场和左、中、右三种大狙
+action_repeat=1
+frame_stack=2
+frame_stack_interval=2
+PCCM 预测未来 5 帧
+halo_width=24
+使用 PCCM 势差奖励，weight=0.05
+持续贴墙惩罚 weight=0.02
+上半场惩罚 weight=0.02
+max_steps=500
+```
+
+训练结果：
+
+```text
+episodes=238
+total_frame_steps=99,719
+mean_frame=419.0
+满 500 帧=171/238
+mean_reward=31.226
+最后 50 局 mean_frame=452.2
+最后 50 局满帧=41/50
+最后 50 局 mean_reward=37.569
+最后 entropy=1.760801
+最后 value_loss=13.144295
+```
+
+结果：
+
+```text
+训练后段的存活和 reward 高于前段
+说明 PCCM observation 可以支持大狙诊断任务
+该版本仍混合使用 PCCM 势差、持续贴墙和上半场奖励
+因此不能单独证明 PCCM state cost 的作用
+lunai_v8_pccm_test1 只写出了配置和表头，没有产生 episode，不计入正式训练结果
+```
+
+## 2026-07-14 20:56：lunai_v8_pccm_stage1_orb_immediate
+
+改动：
+
+```text
+从头训练，不加载旧 checkpoint
+诊断关卡改为空场和左、中、右三种立即出现的大狙
+删除 PCCM 势差、独立贴墙奖励和独立上半场奖励
+改为每帧直接扣除 0.05 * local_PCCM_cost
+碰撞惩罚=-30
+墙壁和上半场代价由 PCCM 本身表达
+action_repeat=1
+frame_stack=2
+frame_stack_interval=2
+halo_width=24
+max_steps=500
+```
+
+训练结果：
+
+```text
+episodes=238
+total_frame_steps=99,599
+mean_frame=418.5
+满 500 帧=178/238
+mean_reward=23.946
+最后 50 局 mean_frame=426.0
+最后 50 局满帧=39/50
+最后 50 局 mean_reward=27.978
+最后 entropy=1.673287
+最后 value_loss=2.172536
+```
+
+结果：
+
+```text
+直接 PCCM state cost 同样能够学会诊断大狙
+value loss 明显低于前一版，训练数值更稳定
+该版本成为后续 level_6 压力训练的奖励和 observation 基线
+```
+
+## 2026-07-14 21:36：lunai_v8.1
+
+改动：
+
+```text
+从头训练 level_6
+由诊断大狙进入随机弹和自机狙混合压力环境
+reward 延续上一版：survival=0.1、collision=-30、PCCM weight=0.05
+action_repeat=1
+frame_stack=2
+frame_stack_interval=2
+halo_width=24
+max_steps=500
+```
+
+日志记录：
+
+```text
+episodes=85
+total_frame_steps=37,821
+mean_frame=445.0
+满 500 帧=35/85
+mean_reward=13.942
+最后 50 局 mean_frame=459.6
+最后 50 局满帧=25/50
+最后 50 局 mean_reward=18.028
+最后 20 局 mean_frame=483.6
+最后 20 局 mean_reward=25.564
+最后 entropy=1.548556
+最后 value_loss=6.265644
+```
+
+结果：
+
+```text
+日志没有跑满原定 100,000 frame steps
+训练后段数值有所提高，但不足以作为完整压力训练结论
+该版本保留为 halo_width=24、较弱 PCCM state penalty 的 level_6 记录
+```
+
+## 2026-07-14 23:55：lunai_v8.2
+
+改动：
+
+```text
+从头训练 level_6
+halo_width 从 24 增加到 32
+max_steps 从 500 增加到 1000
+PCCM state penalty weight 从 0.05 增加到 0.3
+碰撞惩罚从 30 降到 20
+ACTION_CHANGE_PENALTY 保持关闭
+action_repeat=1
+frame_stack=2
+frame_stack_interval=2
+```
+
+训练结果：
+
+```text
+episodes=175
+total_frame_steps=99,754
+mean_frame=570.0
+满 1000 帧=13/175
+mean_reward=-3.164
+前 50 局 mean_frame=558.9
+后 50 局 mean_frame=618.1
+后 50 局满帧=5/50
+最后 20 局 mean_frame=597.6
+最后 20 局 mean_reward=1.505
+最后 entropy=1.380302
+最后 value_loss=1.376697
+```
+
+训练期行为：
+
+```text
+最后 50 局平均 local PCCM=0.231
+最后 50 局贴墙比例=0.540
+最后 50 局 down=38.7%，stay=20.2%
+down_left=10.9%，down_right=10.5%
+存活时间有缓慢提高，但向下动作偏置和贴墙策略同时增强
+```
+
+独立验收：
+
+```text
+greedy 10 局 mean_frame=424.6，collisions=10/10
+greedy 只使用 stay 和 down，最终全部停在 y≈0.964
+stochastic 10 局 mean_frame=617.5，collisions=9/10
+stochastic 有 1 局存活满 1000 帧
+```
+
+结论：
+
+```text
+概率分布中已经包含部分有效避弹动作
+stochastic 表现明显好于 greedy，说明策略尚未形成可靠的确定性决策
+当前 checkpoint 存在明显 down/stay 偏置，不能直接作为最终模型
+```
+
+## 2026-07-15 00:51：lunai_v8.2.1
+
+改动：
+
+```text
+从 lunai_v8.2.pt 继续训练
+其余 observation、reward 和 level_6 保持不变
+learning_rate=0.00004 -> 0.00002
+entropy_coef=0.0015 -> 0.001
+目标是用较低学习率和探索强度继续收敛
+```
+
+训练结果：
+
+```text
+episodes=165
+total_frame_steps=99,719
+mean_frame=604.4
+满 1000 帧=10/165
+mean_reward=-7.375
+前 50 局 mean_frame=628.9
+前 50 局 mean_reward=-0.647
+后 50 局 mean_frame=612.5
+后 50 局满帧=0/50
+后 50 局 mean_reward=-12.807
+最后 20 局 mean_frame=566.4
+最后 20 局 mean_reward=-7.532
+最后 entropy=1.409881
+最后 value_loss=1.932095
+```
+
+训练期行为：
+
+```text
+最后 50 局平均 local PCCM=0.267
+最后 50 局贴墙比例=0.569
+最后 50 局 down=38.8%，down_left=17.4%
+down 和 down_left 合计达到 56.2%
+```
+
+结果：
+
+```text
+续训没有纠正 v8.2 的向下偏置
+后段 reward、满帧数量和 local PCCM 均恶化
+greedy 验收再次收敛到角落策略
+说明单纯延长训练和降低 entropy 不能修复该局部最优
+本轮停止使用，checkpoint 和 CSV 保留为失败实验记录
+```

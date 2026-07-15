@@ -6,7 +6,8 @@ import numpy as np
 SURVIVAL_REWARD = 0.1
 COLLISION_PENALTY = 30.0
 ACTION_CHANGE_PENALTY = 0.0
-PCCM_STATE_PENALTY_WEIGHT = 0.05
+PCCM_STATE_PENALTY_WEIGHT = 0.3
+BLOCKED_MOVEMENT_PENALTY_WEIGHT = 0.05
 WALL_PROXIMITY_MARGIN = 0.12
 
 
@@ -63,14 +64,32 @@ def wall_proximity(observation: dict[str, np.ndarray], margin: float = WALL_PROX
     return horizontal + vertical
 
 
+# Measure the requested movement that was blocked by the playfield boundary.
+def blocked_movement_ratio(
+    requested_dx: float,
+    requested_dy: float,
+    actual_dx: float,
+    actual_dy: float,
+) -> float:
+    requested_length = float(np.hypot(requested_dx, requested_dy))
+    if requested_length <= 1e-8:
+        return 0.0
+    blocked_dx = requested_dx - actual_dx
+    blocked_dy = requested_dy - actual_dy
+    blocked_length = float(np.hypot(blocked_dx, blocked_dy))
+    return float(np.clip(blocked_length / requested_length, 0.0, 1.0))
+
+
 # Compute the total reward for one real game frame.
 def compute_frame_reward(
     observation: dict[str, np.ndarray],
     action: int,
     previous_action: int,
     collided: bool,
+    blocked_ratio: float = 0.0,
 ) -> float:
     collision_penalty = COLLISION_PENALTY if collided else 0.0
-    action_change_penalty = ACTION_CHANGE_PENALTY if action != previous_action else 0.0
     pccm_penalty = 0.0 if collided else PCCM_STATE_PENALTY_WEIGHT * local_pccm_cost(observation)
-    return SURVIVAL_REWARD - collision_penalty - action_change_penalty - pccm_penalty
+    blocked_penalty = BLOCKED_MOVEMENT_PENALTY_WEIGHT * float(np.clip(blocked_ratio, 0.0, 1.0))
+    # action_change_penalty = ACTION_CHANGE_PENALTY if action != previous_action else 0.0
+    return SURVIVAL_REWARD - collision_penalty - pccm_penalty - blocked_penalty # - action_change_penalty

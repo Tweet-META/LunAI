@@ -234,7 +234,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--level-file", type=str, default="level_diagnostic_aimed.json")
     parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
-    parser.add_argument("--pccm-halo-width", type=float, default=24.0)
+    parser.add_argument("--pccm-halo-width", type=float, default=32.0)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)

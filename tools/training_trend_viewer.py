@@ -219,9 +219,6 @@ def draw_line_chart(
     if len(smooth_points) > 1:
         draw.line(smooth_points, fill=color, width=5)
 
-    left, top, right, bottom = rect
-    draw.text((right - 210, top + 8), f"MA{MOVING_AVERAGE_WINDOW}", fill=color, font=small_font)
-
 
 # Draw a frame-step chart using the observed episode range.
 def draw_frame_chart(

@@ -43,6 +43,20 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 直接速度通道已从 PCCM 主线输入中删除。每颗子弹的 `vx/vy` 仍在 observation builder 内部用于未来代价预测。不要在没有新实验依据时恢复 `red_speed`、平均速度或方向通道。
 
+## 当前 CNN 网络
+
+新训练默认使用 `architecture_version=2`。三个尺度仍分别编码，先保留空间结构，再拼接玩家特征进入共享全连接层：
+
+| 分支 | v2 卷积结构 | 池化后大小 |
+| --- | --- | --- |
+| 红区 | `6 -> 32 -> 32 -> 64 -> 64`，中间一次 `2x2` 最大池化 | `64x8x8` |
+| 黄区 | `6 -> 32 -> 64` | `64x4x4` |
+| 蓝区 | `6 -> 32 -> 64` | `64x2x2` |
+
+在当前 `frame_stack=2`、每帧三通道的输入下，v2 共 `808,490` 个可训练参数，其中三个 CNN 编码器共 `106,944` 个参数。融合后的特征维度为 `5,408`，共享层仍为 `5,408 -> 128 -> 64`，没有直接把 hidden dimension 扩大到 256。
+
+旧版 v1 共 `323,802` 个参数，其中 CNN 编码器仅 `7,280` 个参数。旧 checkpoint 若没有 `architecture_version` 元数据，会自动按 v1 加载；加载 v1 checkpoint 不会把网络升级为 v2。需要验证 v2 时必须从头训练，并使用新的 checkpoint 和日志文件名。
+
 ## PCCM 不变量
 
 当前实现位于 `observation_builder.py`，修改时必须保持以下规则：
@@ -70,10 +84,11 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 survival reward       = +0.1
 collision penalty     = -30.0（发生碰撞时）
 action change penalty =  0.0
-PCCM state penalty    = -0.05 * local PCCM cost
+PCCM state penalty    = -0.3 * local PCCM cost
+blocked movement      = -0.05 * blocked ratio
 ```
 
-PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。奖励数值只在 `rl/reward.py` 修改；`rl/touhou_rl_env.py` 只调用完整奖励函数并记录各项统计。
+PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。Blocked movement 只惩罚动作请求中被边界裁剪掉的位移，不是玩家位置型靠墙惩罚；沿墙移动、离墙移动和原地不动的 blocked ratio 均为 0。奖励数值只在 `rl/reward.py` 修改；`rl/touhou_rl_env.py` 负责测量每帧请求位移和真实位移，并调用完整奖励函数。
 
 默认训练和评估中，第一次有效碰撞结束 episode。
 
