@@ -5,6 +5,9 @@ from dataclasses import dataclass
 import numpy as np
 
 
+PCCM_OBSERVATION_MODES = ("occupancy_only", "static", "trajectory")
+
+
 @dataclass(frozen=True)
 class BulletState:
     x: float
@@ -38,6 +41,7 @@ class ObservationConfig:
     pccm_upper_field_cost: float = 0.30
     pccm_soft_cap: float = 0.8
     pccm_implementation: str = "reference"
+    pccm_observation_mode: str = "trajectory"
 
 
 # Return a player-centered window that may extend outside the field.
@@ -574,6 +578,26 @@ def projected_pccm(
     return current.astype(np.float32), prediction.astype(np.float32), wall.astype(np.float32), final
 
 
+# Select the PCCM map exposed to the policy without changing the full reward map.
+def visible_pccm(
+    components: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    mode: str,
+    soft_cap: float,
+) -> np.ndarray:
+    current, _, environment, trajectory = components
+    if mode == "occupancy_only":
+        return np.zeros_like(trajectory, dtype=np.float32)
+    if mode == "trajectory":
+        return trajectory.copy()
+    if mode != "static":
+        raise ValueError(f"Unknown PCCM observation mode: {mode}.")
+
+    static = combine_soft_cost(current, environment)
+    static = np.clip(static, 0.0, soft_cap).astype(np.float32)
+    static[trajectory >= 1.0] = 1.0
+    return static
+
+
 def red_occupancy_map(
     bullets: list[BulletState],
     window: tuple[int, int, int, int],
@@ -628,6 +652,8 @@ class ObservationBuilder:
             raise ValueError("PCCM soft cap must be in (0, 1).")
         if self.config.pccm_implementation not in {"auto", "reference", "roi"}:
             raise ValueError(f"Unknown PCCM implementation: {self.config.pccm_implementation}.")
+        if self.config.pccm_observation_mode not in PCCM_OBSERVATION_MODES:
+            raise ValueError(f"Unknown PCCM observation mode: {self.config.pccm_observation_mode}.")
 
     # Build the full fixed-size observation dictionary.
     def build(self, bullets: list[BulletState], player: PlayerState) -> dict[str, np.ndarray]:
@@ -735,13 +761,23 @@ class ObservationBuilder:
             upper_field_threshold=cfg.pccm_upper_field_threshold,
             upper_field_cost=cfg.pccm_upper_field_cost,
         )
+        reward_red_pccm = red_components[3].copy()
+        reward_red_pccm[red_occ > 0.0] = 1.0
+        red_visible_pccm = visible_pccm(
+            red_components,
+            cfg.pccm_observation_mode,
+            cfg.pccm_soft_cap,
+        )
+        if cfg.pccm_observation_mode != "occupancy_only":
+            red_visible_pccm[red_occ > 0.0] = 1.0
+
         observation.update(
             {
-                "blue_pccm": blue_components[3],
-                "yellow_pccm": yellow_components[3],
+                "blue_pccm": visible_pccm(blue_components, cfg.pccm_observation_mode, cfg.pccm_soft_cap),
+                "yellow_pccm": visible_pccm(yellow_components, cfg.pccm_observation_mode, cfg.pccm_soft_cap),
                 "red_occupancy": red_occ,
-                "red_pccm": red_components[3],
+                "red_pccm": red_visible_pccm,
+                "_reward_red_pccm": reward_red_pccm,
             }
         )
-        observation["red_pccm"][red_occ > 0.0] = 1.0
         return observation

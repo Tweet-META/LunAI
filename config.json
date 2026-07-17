@@ -6,7 +6,8 @@
   "frame_stack": 2,
   "frame_stack_interval": 1,
   "level_files": [
-    "level_6.json"
+    "level_6.json",
+    "level6_mirror.json"
   ],
   "seed": 0,
   "rollout_steps": 1024,

@@ -82,6 +82,7 @@ def validate_checkpoint_shapes(
     args_pccm_wall_margin: float = 0.12,
     args_pccm_upper_field_threshold: float = 0.70,
     args_pccm_upper_field_cost: float = 0.30,
+    args_pccm_observation_mode: str = "trajectory",
 ) -> None:
     expected_pccm = (
         config.pccm_prediction_frames,
@@ -100,6 +101,11 @@ def validate_checkpoint_shapes(
     if expected_pccm != environment_pccm:
         raise ValueError(
             f"Checkpoint PCCM settings={expected_pccm}, but environment PCCM settings={environment_pccm}."
+        )
+    if config.pccm_observation_mode != args_pccm_observation_mode:
+        raise ValueError(
+            "Checkpoint PCCM observation mode="
+            f"{config.pccm_observation_mode}, but environment mode={args_pccm_observation_mode}."
         )
     if config.frame_stack != frame_stack:
         raise ValueError(
@@ -138,6 +144,7 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "pccm_wall_margin": args.pccm_wall_margin,
         "pccm_upper_field_threshold": args.pccm_upper_field_threshold,
         "pccm_upper_field_cost": args.pccm_upper_field_cost,
+        "pccm_observation_mode": args.pccm_observation_mode,
     }
 
 
@@ -157,6 +164,7 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
             args.pccm_wall_margin,
             args.pccm_upper_field_threshold,
             args.pccm_upper_field_cost,
+            args.pccm_observation_mode,
         )
         config.gamma = args.gamma
         config.gae_lambda = args.gae_lambda
@@ -186,6 +194,7 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
                 pccm_wall_margin=args.pccm_wall_margin,
                 pccm_upper_field_threshold=args.pccm_upper_field_threshold,
                 pccm_upper_field_cost=args.pccm_upper_field_cost,
+                pccm_observation_mode=args.pccm_observation_mode,
                 frame_stack=args.frame_stack,
                 frame_stack_interval=args.frame_stack_interval,
                 action_dim=9,
@@ -553,6 +562,7 @@ def train(args: argparse.Namespace) -> None:
         pccm_wall_margin=args.pccm_wall_margin,
         pccm_upper_field_threshold=args.pccm_upper_field_threshold,
         pccm_upper_field_cost=args.pccm_upper_field_cost,
+        pccm_observation_mode=args.pccm_observation_mode,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -647,6 +657,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
+    parser.add_argument(
+        "--pccm-observation-mode",
+        choices=("occupancy_only", "static", "trajectory"),
+        default="trajectory",
+    )
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--learning-rate-final", type=float, default=-1.0)

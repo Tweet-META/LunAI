@@ -72,6 +72,7 @@ def create_environment(
         pccm_wall_margin=args.pccm_wall_margin,
         pccm_upper_field_threshold=args.pccm_upper_field_threshold,
         pccm_upper_field_cost=args.pccm_upper_field_cost,
+        pccm_observation_mode=args.pccm_observation_mode,
     )
 
 
@@ -256,6 +257,7 @@ def main() -> None:
     args.pccm_wall_margin = config.pccm_wall_margin
     args.pccm_upper_field_threshold = config.pccm_upper_field_threshold
     args.pccm_upper_field_cost = config.pccm_upper_field_cost
+    args.pccm_observation_mode = config.pccm_observation_mode
 
     empty_env = create_environment(args, "level_diagnostic_empty.json", render=args.render)
     try:
@@ -271,6 +273,7 @@ def main() -> None:
             config.pccm_wall_margin,
             config.pccm_upper_field_threshold,
             config.pccm_upper_field_cost,
+            config.pccm_observation_mode,
         )
 
         agent = CNNPPOAgent(config)

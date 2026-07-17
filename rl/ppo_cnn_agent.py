@@ -26,6 +26,7 @@ class CNNPPOConfig:
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30
+    pccm_observation_mode: str = "trajectory"
     frame_stack: int = 1
     frame_stack_interval: int = 1
     action_dim: int = 9
@@ -319,6 +320,7 @@ def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     config_data.setdefault("pccm_upper_field_threshold", 0.70)
     # Old checkpoints were trained before the upper-field PCCM prior existed.
     config_data.setdefault("pccm_upper_field_cost", 0.0)
+    config_data.setdefault("pccm_observation_mode", "trajectory")
     config_data.setdefault("frame_stack", 1)
     config_data.setdefault("frame_stack_interval", 1)
     config_data["red_shape"] = tuple(config_data["red_shape"])

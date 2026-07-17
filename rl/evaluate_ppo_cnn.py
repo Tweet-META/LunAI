@@ -43,6 +43,7 @@ def evaluate(args: argparse.Namespace) -> None:
         pccm_wall_margin=config.pccm_wall_margin,
         pccm_upper_field_threshold=config.pccm_upper_field_threshold,
         pccm_upper_field_cost=config.pccm_upper_field_cost,
+        pccm_observation_mode=config.pccm_observation_mode,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -57,6 +58,7 @@ def evaluate(args: argparse.Namespace) -> None:
         config.pccm_wall_margin,
         config.pccm_upper_field_threshold,
         config.pccm_upper_field_cost,
+        config.pccm_observation_mode,
     )
 
     agent = CNNPPOAgent(config)

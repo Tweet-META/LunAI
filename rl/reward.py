@@ -36,7 +36,9 @@ def player_red_map_position(observation: dict[str, np.ndarray]) -> tuple[float, 
 
 # Sample the red PCCM at the player's continuous map position.
 def local_pccm_cost(observation: dict[str, np.ndarray]) -> float:
-    pccm = observation.get("red_pccm")
+    pccm = observation.get("_reward_red_pccm")
+    if pccm is None:
+        pccm = observation.get("red_pccm")
     if pccm is None:
         return 0.0
     x, y = player_red_map_position(observation)
