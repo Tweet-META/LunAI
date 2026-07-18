@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 from pathlib import Path
 
@@ -22,6 +23,36 @@ def print_action_probs(env: TouhouRLEnv, probs: np.ndarray) -> None:
     order = np.argsort(probs)[::-1]
     summary = ", ".join(f"{env.ACTIONS[int(i)]}={probs[int(i)]:.3f}" for i in order)
     print(f"action_probs: {summary}")
+
+
+# Create a CSV file for per-episode evaluation results.
+def initialize_evaluation_log(path: Path, action_names: tuple[str, ...]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "model_path",
+        "policy_mode",
+        "episode",
+        "evaluation_seed",
+        "level_file",
+        "decision_steps",
+        "frame_steps",
+        "episode_reward",
+        "completed",
+        "collisions",
+        "hp",
+        "final_player_x",
+        "final_player_y",
+        *(f"action_{name}" for name in action_names),
+    ]
+    with path.open("w", newline="", encoding="utf-8") as file:
+        csv.DictWriter(file, fieldnames=fieldnames).writeheader()
+
+
+# Append one completed evaluation episode to the CSV file.
+def append_evaluation_log(path: Path, row: dict[str, object]) -> None:
+    with path.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(row))
+        writer.writerow(row)
 
 
 # Evaluate a saved CNN PPO model.
@@ -63,6 +94,10 @@ def evaluate(args: argparse.Namespace) -> None:
 
     agent = CNNPPOAgent(config)
     agent.load(str(Path(args.model_path)))
+    log_path = Path(args.log_path) if args.log_path else None
+    action_names = tuple(str(name) for name in env.ACTIONS)
+    if log_path is not None:
+        initialize_evaluation_log(log_path, action_names)
     episode_rewards = []
     episode_frames = []
     episode_decisions = []
@@ -99,13 +134,31 @@ def evaluate(args: argparse.Namespace) -> None:
             episode_frames.append(frames)
             episode_decisions.append(decisions)
             collisions.append(total_collisions)
+            player_features = observation["player_features"]
+            if log_path is not None:
+                row: dict[str, object] = {
+                    "model_path": args.model_path,
+                    "policy_mode": "stochastic" if args.stochastic else "greedy",
+                    "episode": episode,
+                    "evaluation_seed": args.seed + episode,
+                    "level_file": env.current_level_file,
+                    "decision_steps": decisions,
+                    "frame_steps": frames,
+                    "episode_reward": total_reward,
+                    "completed": int(total_collisions == 0),
+                    "collisions": total_collisions,
+                    "hp": last_info.get("hp", 0),
+                    "final_player_x": float(player_features[0]),
+                    "final_player_y": float(player_features[1]),
+                }
+                row.update({f"action_{action_names[i]}": int(count) for i, count in enumerate(action_counts)})
+                append_evaluation_log(log_path, row)
             print(
                 f"episode={episode}, decision_steps={decisions}, frame_steps={frames}, reward={total_reward:.3f}, "
                 f"hp={last_info.get('hp', 0)}, collisions={total_collisions}"
             )
             if args.print_actions:
                 action_summary = ", ".join(f"{env.ACTIONS[i]}={count}" for i, count in enumerate(action_counts) if count > 0)
-                player_features = observation["player_features"]
                 print(f"actions: {action_summary}")
                 print(f"final_player_xy=({player_features[0]:.3f}, {player_features[1]:.3f})")
 
@@ -134,6 +187,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--log-path", type=str, default="")
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--print-actions", action="store_true")
     parser.add_argument("--print-action-probs", action="store_true")
