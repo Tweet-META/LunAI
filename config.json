@@ -3,8 +3,9 @@
   "max_steps": 1000,
   "max_total_frame_steps": 1000000,
   "action_repeat": 1,
-  "frame_stack": 2,
+  "frame_stack": 4,
   "frame_stack_interval": 1,
+  "num_envs": 8,
   "level_files": [
     "level_6.json",
     "level6_mirror.json"

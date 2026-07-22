@@ -26,9 +26,9 @@ class CNNPPOConfig:
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30
-    pccm_observation_mode: str = "trajectory"
     frame_stack: int = 1
     frame_stack_interval: int = 1
+    action_repeat: int | None = None
     action_dim: int = 9
     hidden_dim: int = 128
     gamma: float = 0.99
@@ -49,6 +49,7 @@ class CNNActorCritic(nn.Module):
     def __init__(self, config: CNNPPOConfig):
         super().__init__()
         if config.architecture_version == 1:
+            scale_feature_dims = {"red": 32 * 8 * 8, "yellow": 16 * 4 * 4, "blue": 16 * 2 * 2}
             self.red_encoder = nn.Sequential(
                 nn.Conv2d(config.red_shape[0], 16, kernel_size=3, padding=1),
                 nn.ReLU(),
@@ -69,8 +70,8 @@ class CNNActorCritic(nn.Module):
                 nn.AdaptiveAvgPool2d((2, 2)),
                 nn.Flatten(),
             )
-            feature_dim = 32 * 8 * 8 + 16 * 4 * 4 + 16 * 2 * 2 + 32
         elif config.architecture_version == 2:
+            scale_feature_dims = {"red": 64 * 8 * 8, "yellow": 64 * 4 * 4, "blue": 64 * 2 * 2}
             self.red_encoder = nn.Sequential(
                 nn.Conv2d(config.red_shape[0], 32, kernel_size=3, padding=1),
                 nn.ReLU(),
@@ -100,9 +101,10 @@ class CNNActorCritic(nn.Module):
                 nn.AdaptiveAvgPool2d((2, 2)),
                 nn.Flatten(),
             )
-            feature_dim = 64 * 8 * 8 + 64 * 4 * 4 + 64 * 2 * 2 + 32
         else:
             raise ValueError(f"Unsupported CNN architecture version: {config.architecture_version}.")
+
+        feature_dim = sum(scale_feature_dims.values()) + 32
 
         self.player_encoder = nn.Sequential(
             nn.Linear(config.player_dim, 32),
@@ -138,6 +140,7 @@ class CNNPPOAgent:
         self.model = CNNActorCritic(config).to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.learning_rate)
         self.train_steps = 0
+        self.training_state: dict[str, int] = {}
 
     # Choose CPU or CUDA for training.
     def _select_device(self, requested_device: str) -> torch.device:
@@ -290,13 +293,15 @@ class CNNPPOAgent:
         }
 
     # Save the model and training metadata.
-    def save(self, path: str) -> None:
+    def save(self, path: str, training_state: dict[str, int] | None = None) -> None:
+        saved_training_state = dict(training_state or self.training_state)
         torch.save(
             {
                 "model": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "config": asdict(self.config),
                 "train_steps": self.train_steps,
+                "training_state": saved_training_state,
             },
             path,
         )
@@ -307,6 +312,10 @@ class CNNPPOAgent:
         self.model.load_state_dict(checkpoint["model"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
         self.train_steps = int(checkpoint.get("train_steps", 0))
+        self.training_state = {
+            str(key): int(value)
+            for key, value in checkpoint.get("training_state", {}).items()
+        }
 
 
 # Load a CNN PPO config dictionary from a checkpoint.
@@ -314,15 +323,17 @@ def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     checkpoint = torch.load(path, map_location="cpu")
     config_data = dict(checkpoint["config"])
     config_data.setdefault("architecture_version", 1)
+    config_data.pop("observation_scales", None)
     config_data.setdefault("pccm_prediction_frames", 5)
     config_data.setdefault("pccm_halo_width", 32.0)
     config_data.setdefault("pccm_wall_margin", 0.12)
     config_data.setdefault("pccm_upper_field_threshold", 0.70)
     # Old checkpoints were trained before the upper-field PCCM prior existed.
     config_data.setdefault("pccm_upper_field_cost", 0.0)
-    config_data.setdefault("pccm_observation_mode", "trajectory")
+    config_data.pop("pccm_observation_mode", None)
     config_data.setdefault("frame_stack", 1)
     config_data.setdefault("frame_stack_interval", 1)
+    config_data.setdefault("action_repeat", None)
     config_data["red_shape"] = tuple(config_data["red_shape"])
     config_data["yellow_shape"] = tuple(config_data["yellow_shape"])
     config_data["blue_shape"] = tuple(config_data["blue_shape"])

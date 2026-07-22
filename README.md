@@ -2,7 +2,7 @@
 
 LunAI is a reinforcement learning project for training bullet-hell game agents in a pygame-based Touhou-style environment.
 
-The current project focuses on a multi-scale, multi-frame CNN PPO agent. Earlier MLP PPO, DQN, and random baseline implementations are archived under `rl/legacy/`.
+The current project focuses on a multi-scale, multi-frame CNN PPO agent. Earlier MLP PPO and DQN implementations are archived under `rl/legacy/`.
 
 ## Project Scope
 
@@ -15,7 +15,7 @@ This repository includes:
 - RL environment wrappers
 - reward function design
 - CNN PPO training and evaluation scripts
-- legacy MLP PPO, DQN, and random baseline code under `rl/legacy/`
+- legacy MLP PPO and DQN code under `rl/legacy/`
 - curriculum levels for staged training
 - evaluation and visualization tools
 
@@ -39,9 +39,11 @@ python rl/train_ppo_cnn.py --config config.json
 python rl/train_ppo_cnn.py --config config.json --max-total-frame-steps 1000000
 ```
 
-Each new PPO log begins with a `# run_config:` JSON line containing the final effective parameters, including any command-line overrides. The trend viewer skips this metadata line automatically.
+Each new PPO log begins with a `# run_config:` JSON line containing the final effective parameters, including any command-line overrides.
 
-`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. The CNN trainer currently contains an experimental invincible-contact mode: a bullet or enemy-body contact does not end the training episode, but receives the collision penalty on every contact frame. CNN evaluation remains lethal. This training-evaluation mismatch is recorded as a failed v6 experiment and is not the recommended main training route.
+`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. Training and evaluation both end an episode on the first valid collision.
+
+Checkpoints store the action repeat, frame-stack settings, optimizer state, and cumulative training counters. Evaluation uses the saved environment settings unless they are explicitly overridden. Continued training appends to an existing log and resumes the cumulative schedule, while starting from a fresh environment episode.
 
 ### PCCM (Potential Collision Cost Map) Observation
 
@@ -55,15 +57,15 @@ PCCM uses each bullet's own position, hitbox, and velocity to estimate current s
 
 The current environment prior also assigns the upper 70% of the playfield a mild PCCM cost that increases linearly from `0.0` at the boundary to `0.3` at the top. It is softly composed with wall and bullet costs rather than treated as a hard collision.
 
-The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. The full-grid NumPy implementation remains the training default. An exact floating-point ROI implementation and an experimental `auto` hybrid are retained for profiling, but real-level benchmarks did not show an end-to-end observation-building speedup. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
+The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. The main environment uses the full-grid NumPy implementation. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
 
-Run `python tools/benchmark_pccm_roi.py` to compare the reference, pure ROI, and `auto` implementations at 80, 200, and 500 synthetic bullets. The command also checks maximum and mean absolute error and requires zero hard-collision mismatches. Run `python tools/benchmark_pccm_level.py` for a complete observation-building comparison on the dedicated 500-bullet pygame level.
+Paper baselines, ablation switches, extrapolation levels, plotting scripts, and PCCM profiling implementations are available on the standalone [`experiments`](https://github.com/Tweet-META/LunAI/tree/experiments) branch.
 
 PCCM checkpoints store their prediction horizon, halo width, and wall margin to prevent silent evaluation mismatches.
 
 ### Parallel Environment Sampling
 
-`--num-envs` defaults to `1`. It can use several headless game environments on a CUDA-capable machine while keeping one shared CNN PPO model in the main process:
+`--num-envs` defaults to `1`; the current `config.json` uses `8`. It can use several headless game environments on a CUDA-capable machine while keeping one shared CNN PPO model in the main process:
 
 ```powershell
 python rl/train_ppo_cnn.py --config config.json
@@ -71,9 +73,9 @@ python rl/train_ppo_cnn.py --config config.json
 
 The environment workers run pygame and observation building on CPU. The main process batches their observations for one GPU model, so workers do not create separate models or checkpoints. `rollout_steps` is the total PPO batch size and must be divisible by `num_envs`. Parallel training cannot use `--render`, and CNN logs include an `env_id` column.
 
-PCCM logs also record mean local risk, total PCCM state penalty, wall-time ratio, and all nine episode action counts.
+PCCM logs also record mean local risk, blocked-movement ratio, wall-time ratio, and all nine episode action counts.
 
-The main reward applies a persistent `0.05 * current_local_PCCM` penalty on every non-collision frame.
+The main reward applies a persistent `0.1 * current_local_PCCM` penalty on every non-collision frame.
 
 ## Acknowledgements
 

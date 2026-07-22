@@ -82,7 +82,7 @@ def validate_checkpoint_shapes(
     args_pccm_wall_margin: float = 0.12,
     args_pccm_upper_field_threshold: float = 0.70,
     args_pccm_upper_field_cost: float = 0.30,
-    args_pccm_observation_mode: str = "trajectory",
+    args_action_repeat: int | None = None,
 ) -> None:
     expected_pccm = (
         config.pccm_prediction_frames,
@@ -102,11 +102,6 @@ def validate_checkpoint_shapes(
         raise ValueError(
             f"Checkpoint PCCM settings={expected_pccm}, but environment PCCM settings={environment_pccm}."
         )
-    if config.pccm_observation_mode != args_pccm_observation_mode:
-        raise ValueError(
-            "Checkpoint PCCM observation mode="
-            f"{config.pccm_observation_mode}, but environment mode={args_pccm_observation_mode}."
-        )
     if config.frame_stack != frame_stack:
         raise ValueError(
             f"Checkpoint frame_stack={config.frame_stack}, but --frame-stack={frame_stack}."
@@ -115,6 +110,10 @@ def validate_checkpoint_shapes(
         raise ValueError(
             "Checkpoint frame_stack_interval="
             f"{config.frame_stack_interval}, but --frame-stack-interval={frame_stack_interval}."
+        )
+    if config.action_repeat is not None and args_action_repeat is not None and config.action_repeat != args_action_repeat:
+        raise ValueError(
+            f"Checkpoint action_repeat={config.action_repeat}, but --action-repeat={args_action_repeat}."
         )
     if config.red_shape != shapes["red"]:
         raise ValueError(f"Checkpoint red_shape={config.red_shape}, but environment red_shape={shapes['red']}.")
@@ -144,7 +143,6 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "pccm_wall_margin": args.pccm_wall_margin,
         "pccm_upper_field_threshold": args.pccm_upper_field_threshold,
         "pccm_upper_field_cost": args.pccm_upper_field_cost,
-        "pccm_observation_mode": args.pccm_observation_mode,
     }
 
 
@@ -164,7 +162,7 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
             args.pccm_wall_margin,
             args.pccm_upper_field_threshold,
             args.pccm_upper_field_cost,
-            args.pccm_observation_mode,
+            args.action_repeat,
         )
         config.gamma = args.gamma
         config.gae_lambda = args.gae_lambda
@@ -194,9 +192,9 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
                 pccm_wall_margin=args.pccm_wall_margin,
                 pccm_upper_field_threshold=args.pccm_upper_field_threshold,
                 pccm_upper_field_cost=args.pccm_upper_field_cost,
-                pccm_observation_mode=args.pccm_observation_mode,
                 frame_stack=args.frame_stack,
                 frame_stack_interval=args.frame_stack_interval,
+                action_repeat=args.action_repeat,
                 action_dim=9,
                 hidden_dim=args.hidden_dim,
                 gamma=args.gamma,
@@ -214,7 +212,53 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
         )
 
     print(f"Using device: {agent.device}")
+    print("Observation scales: full")
     return agent
+
+
+# Restore cumulative counters while starting a fresh environment episode.
+def restored_training_counters(agent: CNNPPOAgent, single_env: bool = False) -> dict[str, int]:
+    counters = {
+        "episode": 1,
+        "update": 0,
+        "global_step": 0,
+        "total_frame_steps": 0,
+    }
+    for key in counters:
+        if key in agent.training_state:
+            counters[key] = int(agent.training_state[key])
+    if single_env:
+        counters.update(
+            {
+                "episode_frame_steps": 0,
+                "episode_reward": 0,
+                "episode_collisions": 0,
+                "last_done": 0,
+            }
+        )
+    return counters
+
+
+# Write a new log header or append when continuing the same run.
+def prepare_training_log(path: Path, args: argparse.Namespace, include_env_id: bool) -> None:
+    if args.load_path and path.exists() and path.stat().st_size > 0:
+        print(f"Appending training log: {path}")
+        return
+    write_log_header(
+        path,
+        vars(args),
+        include_env_id=include_env_id,
+        extra_columns=PCCM_LOG_COLUMNS,
+    )
+
+
+# Save stable counters together with the model and optimizer.
+def save_training_checkpoint(agent: CNNPPOAgent, path: Path, counters: dict[str, int]) -> None:
+    training_state = {
+        key: int(counters[key])
+        for key in ("episode", "update", "global_step", "total_frame_steps")
+    }
+    agent.save(str(path), training_state=training_state)
 
 
 # Compute GAE separately for each parallel environment timeline.
@@ -468,23 +512,20 @@ def train_parallel(args: argparse.Namespace) -> None:
         agent = create_agent(args, shapes)
         log_path = Path(args.log_path)
         model_path = Path(args.model_path)
-        write_log_header(
-            log_path,
-            vars(args),
-            include_env_id=True,
-            extra_columns=PCCM_LOG_COLUMNS,
-        )
+        prepare_training_log(log_path, args, include_env_id=True)
         ensure_parent_dir(model_path)
-        counters = {
-            "episode": 1,
-            "update": 0,
-            "global_step": 0,
-            "total_frame_steps": 0,
-        }
+        counters = restored_training_counters(agent)
+        if agent.training_state:
+            resume_seed = args.seed + counters["episode"]
+            states = envs.reset([resume_seed + env_id for env_id in range(args.num_envs)])
+            print(
+                f"Resuming counters: episode={counters['episode']}, update={counters['update']}, "
+                f"decision_steps={counters['global_step']}, frame_steps={counters['total_frame_steps']}"
+            )
         episode_rewards = np.zeros(args.num_envs, dtype=np.float32)
         episode_collisions = np.zeros(args.num_envs, dtype=np.int64)
         episode_frame_steps = np.zeros(args.num_envs, dtype=np.int64)
-        next_reset_seed = args.seed + args.num_envs
+        next_reset_seed = args.seed + counters["episode"] + args.num_envs
         latest_metrics = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0}
         print(f"Parallel environments: {args.num_envs}")
 
@@ -525,9 +566,9 @@ def train_parallel(args: argparse.Namespace) -> None:
             counters["update"] += 1
 
             if counters["update"] % args.save_interval == 0:
-                agent.save(str(model_path))
+                save_training_checkpoint(agent, model_path, counters)
 
-        agent.save(str(model_path))
+        save_training_checkpoint(agent, model_path, counters)
         print(
             f"Training finished: reason={training_stop_reason(args, counters)}, "
             f"episodes_completed={counters['episode'] - 1}, decision_steps={counters['global_step']}, "
@@ -562,7 +603,6 @@ def train(args: argparse.Namespace) -> None:
         pccm_wall_margin=args.pccm_wall_margin,
         pccm_upper_field_threshold=args.pccm_upper_field_threshold,
         pccm_upper_field_cost=args.pccm_upper_field_cost,
-        pccm_observation_mode=args.pccm_observation_mode,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -571,25 +611,17 @@ def train(args: argparse.Namespace) -> None:
 
     log_path = Path(args.log_path)
     model_path = Path(args.model_path)
-    write_log_header(
-        log_path,
-        vars(args),
-        include_env_id=True,
-        extra_columns=PCCM_LOG_COLUMNS,
-    )
+    prepare_training_log(log_path, args, include_env_id=True)
     ensure_parent_dir(model_path)
 
+    counters = restored_training_counters(agent, single_env=True)
+    if agent.training_state:
+        first_observation = env.reset(seed=args.seed + counters["episode"])
+        print(
+            f"Resuming counters: episode={counters['episode']}, update={counters['update']}, "
+            f"decision_steps={counters['global_step']}, frame_steps={counters['total_frame_steps']}"
+        )
     state = cnn_observation(first_observation, env.get_map_history())
-    counters = {
-        "episode": 1,
-        "update": 0,
-        "global_step": 0,
-        "total_frame_steps": 0,
-        "episode_frame_steps": 0,
-        "episode_reward": 0.0,
-        "episode_collisions": 0,
-        "last_done": False,
-    }
     latest_metrics = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0}
 
     try:
@@ -618,9 +650,9 @@ def train(args: argparse.Namespace) -> None:
             counters["update"] += 1
 
             if counters["update"] % args.save_interval == 0:
-                agent.save(str(model_path))
+                save_training_checkpoint(agent, model_path, counters)
 
-        agent.save(str(model_path))
+        save_training_checkpoint(agent, model_path, counters)
         print(
             f"Training finished: reason={training_stop_reason(args, counters)}, "
             f"episodes_completed={counters['episode'] - 1}, decision_steps={counters['global_step']}, "
@@ -657,11 +689,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
-    parser.add_argument(
-        "--pccm-observation-mode",
-        choices=("occupancy_only", "static", "trajectory"),
-        default="trajectory",
-    )
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--learning-rate-final", type=float, default=-1.0)

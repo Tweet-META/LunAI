@@ -37,7 +37,7 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 红区用于精细反应，黄区用于中距离规划，蓝区用于全局态势。红、黄窗口始终以玩家为中心，可以超出游戏区域；场外部分由 playable mask 表示，不应通过移动窗口或吸附网格来隐藏。
 
-每帧每个分支有三个通道。若 `frame_stack=2`，每个分支有六个输入通道；三种尺度仍分别进入各自 CNN，不要误写为一张普通的 18 通道全屏图。
+每帧每个分支有三个通道。当前 `frame_stack=4`，因此每个分支有十二个输入通道；三种尺度仍分别进入各自 CNN，不要误写为一张普通的 36 通道全屏图。
 
 玩家特征通过单独的 MLP 分支输入。敌人本体具有体术碰撞，因此与敌弹一样作为 hazard 写入观察。
 
@@ -49,11 +49,11 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 | 分支 | v2 卷积结构 | 池化后大小 |
 | --- | --- | --- |
-| 红区 | `6 -> 32 -> 32 -> 64 -> 64`，中间一次 `2x2` 最大池化 | `64x8x8` |
-| 黄区 | `6 -> 32 -> 64` | `64x4x4` |
-| 蓝区 | `6 -> 32 -> 64` | `64x2x2` |
+| 红区 | `12 -> 32 -> 32 -> 64 -> 64`，中间一次 `2x2` 最大池化 | `64x8x8` |
+| 黄区 | `12 -> 32 -> 64` | `64x4x4` |
+| 蓝区 | `12 -> 32 -> 64` | `64x2x2` |
 
-在当前 `frame_stack=2`、每帧三通道的输入下，v2 共 `808,490` 个可训练参数，其中三个 CNN 编码器共 `106,944` 个参数。融合后的特征维度为 `5,408`，共享层仍为 `5,408 -> 128 -> 64`，没有直接把 hidden dimension 扩大到 256。
+在当前 `frame_stack=4`、每帧三通道的输入下，v2 共 `813,674` 个可训练参数，其中三个 CNN 编码器共 `112,128` 个参数。融合后的特征维度为 `5,408`，共享层仍为 `5,408 -> 128 -> 64`，没有直接把 hidden dimension 扩大到 256。
 
 旧版 v1 共 `323,802` 个参数，其中 CNN 编码器仅 `7,280` 个参数。旧 checkpoint 若没有 `architecture_version` 元数据，会自动按 v1 加载；加载 v1 checkpoint 不会把网络升级为 v2。需要验证 v2 时必须从头训练，并使用新的 checkpoint 和日志文件名。
 
@@ -71,8 +71,7 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 8. 场外区域不写成 PCCM 的硬危险，只由 playable mask 表示不可到达。
 9. 四面墙分别贡献软代价，因此角落会自然叠加。
 10. 上方 70% 区域从分界线的 0 线性增加到顶部的 0.3，并与墙壁代价软叠加。
-11. `reference` NumPy broadcasting 实现必须保留，并且目前仍是训练默认实现。
-12. ROI optimized 和 `auto` 仅作为精确实现及性能研究保留，不得为了“优化”删除 reference。
+11. 主线只保留 NumPy broadcasting 实现；ROI 和 `auto` 性能实验位于独立的 `experiments` 分支。
 
 未来轨迹在普通慢速子弹上可能不明显。例如 `145 px/s` 的子弹在五帧内只移动约 `12 px`；`600 px/s` 的诊断弹会移动约 `50 px`。这不是预测失效。
 
@@ -84,7 +83,7 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 survival reward       = +0.1
 collision penalty     = -30.0（发生碰撞时）
 action change penalty =  0.0
-PCCM state penalty    = -0.3 * local PCCM cost
+PCCM state penalty    = -0.1 * local PCCM cost
 blocked movement      = -0.05 * blocked ratio
 ```
 
@@ -124,18 +123,6 @@ python rl/train_ppo_cnn.py --config config.json
 python tools/realtime_observation_map.py --level-file level_diagnostic_fast_aimed.json
 ```
 
-PCCM 一致性与微基准：
-
-```powershell
-python tools/benchmark_pccm_roi.py
-```
-
-真实关卡 observation 基准：
-
-```powershell
-python tools/benchmark_pccm_level.py
-```
-
 ## 修改与验证规则
 
 - 保持修改范围紧凑，不顺手重构无关代码。
@@ -146,17 +133,18 @@ python tools/benchmark_pccm_level.py
 - 手工代码修改后至少运行相关 `py_compile`、目标测试和 `git diff --check`。
 - 改 observation 时必须验证 shape、有限数值、PCCM 硬碰撞一致性和 PPO smoke training。
 - 改可视化时应实际生成或打开截图，检查尺寸、对齐和文字重叠。
-- 不删除失败实验和历史记录；它们是论文实验过程的一部分。
+- 不删除失败实验和历史记录；实验代码集中保存在独立的 `experiments` 分支。
 
 ## 关键文件
 
-- `observation_builder.py`：多尺度地图、PCCM、reference/ROI 实现。
+- `observation_builder.py`：主线多尺度地图与 trajectory-aware PCCM。
 - `observation_sources.py`：从 pygame scene 提取玩家、敌弹和敌人状态。
 - `rl/cnn_observation_utils.py`：多帧、多通道 CNN 输入堆叠。
 - `rl/ppo_cnn_agent.py`：三分支 CNN PPO 网络及 checkpoint 元数据。
 - `rl/touhou_rl_env.py`：环境推进、奖励统计、frame history 和渲染。
 - `rl/reward.py`：完整奖励数值与计算函数。
-- `config.json`：当前实验配置。
+- `config.json`：当前主线训练配置。
+- GitHub `experiments` 分支：可独立运行的论文实验环境、消融配置和分析工具。
 - `training_logs/plots/reward_and_training_history.md`：按时间记录的实验历史。
 - `tools/visualization_debug.py`：完整游戏区域上的合成 PCCM 调试图。
 

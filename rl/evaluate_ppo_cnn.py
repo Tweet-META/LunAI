@@ -58,6 +58,12 @@ def append_evaluation_log(path: Path, row: dict[str, object]) -> None:
 # Evaluate a saved CNN PPO model.
 def evaluate(args: argparse.Namespace) -> None:
     config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
+    args.action_repeat = config.action_repeat if args.action_repeat is None else args.action_repeat
+    args.action_repeat = 1 if args.action_repeat is None else args.action_repeat
+    args.frame_stack = config.frame_stack if args.frame_stack is None else args.frame_stack
+    args.frame_stack_interval = (
+        config.frame_stack_interval if args.frame_stack_interval is None else args.frame_stack_interval
+    )
     env = TouhouRLEnv(
         render_mode="human" if args.render or args.render_debug else None,
         max_steps=args.max_steps,
@@ -74,7 +80,6 @@ def evaluate(args: argparse.Namespace) -> None:
         pccm_wall_margin=config.pccm_wall_margin,
         pccm_upper_field_threshold=config.pccm_upper_field_threshold,
         pccm_upper_field_cost=config.pccm_upper_field_cost,
-        pccm_observation_mode=config.pccm_observation_mode,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -89,7 +94,7 @@ def evaluate(args: argparse.Namespace) -> None:
         config.pccm_wall_margin,
         config.pccm_upper_field_threshold,
         config.pccm_upper_field_cost,
-        config.pccm_observation_mode,
+        args.action_repeat,
     )
 
     agent = CNNPPOAgent(config)
@@ -177,9 +182,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-path", type=str, default="checkpoints/ppo_cnn_baseline.pt")
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=1800)
-    parser.add_argument("--action-repeat", type=int, default=3)
-    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=1)
-    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=1)
+    parser.add_argument("--action-repeat", type=int, default=None)
+    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=None)
+    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=None)
     parser.add_argument("--level-file", type=str, default="level_1.json")
     parser.add_argument("--level-files", nargs="*", default=[])
     parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)

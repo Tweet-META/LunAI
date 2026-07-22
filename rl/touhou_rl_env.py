@@ -57,7 +57,6 @@ class TouhouRLEnv:
         pccm_wall_margin: float = 0.12,
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
-        pccm_observation_mode: str = "trajectory",
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -87,7 +86,6 @@ class TouhouRLEnv:
         self.pccm_wall_margin = float(pccm_wall_margin)
         self.pccm_upper_field_threshold = float(pccm_upper_field_threshold)
         self.pccm_upper_field_cost = float(pccm_upper_field_cost)
-        self.pccm_observation_mode = str(pccm_observation_mode)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
 
@@ -114,7 +112,6 @@ class TouhouRLEnv:
                 pccm_wall_margin=self.pccm_wall_margin,
                 pccm_upper_field_threshold=self.pccm_upper_field_threshold,
                 pccm_upper_field_cost=self.pccm_upper_field_cost,
-                pccm_observation_mode=self.pccm_observation_mode,
             )
         )
 

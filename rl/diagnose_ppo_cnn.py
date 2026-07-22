@@ -61,7 +61,7 @@ def create_environment(
     return TouhouRLEnv(
         render_mode="human" if render else None,
         max_steps=args.max_steps,
-        action_repeat=1,
+        action_repeat=args.action_repeat,
         level_file=level_file,
         level_spawn_time_jitter=args.level_spawn_time_jitter,
         random_player_start=False,
@@ -72,7 +72,6 @@ def create_environment(
         pccm_wall_margin=args.pccm_wall_margin,
         pccm_upper_field_threshold=args.pccm_upper_field_threshold,
         pccm_upper_field_cost=args.pccm_upper_field_cost,
-        pccm_observation_mode=args.pccm_observation_mode,
     )
 
 
@@ -230,8 +229,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=str, default="diagnostics/cnn_policy")
     parser.add_argument("--episodes", type=int, default=20)
     parser.add_argument("--max-steps", type=int, default=720)
-    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=2)
-    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=2)
+    parser.add_argument("--action-repeat", type=int, default=None)
+    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=None)
+    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=None)
     parser.add_argument("--level-file", type=str, default="level_diagnostic_aimed.json")
     parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
@@ -252,12 +252,17 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     config = load_cnn_ppo_config(str(Path(args.model_path)), device=args.device)
+    args.action_repeat = config.action_repeat if args.action_repeat is None else args.action_repeat
+    args.action_repeat = 1 if args.action_repeat is None else args.action_repeat
+    args.frame_stack = config.frame_stack if args.frame_stack is None else args.frame_stack
+    args.frame_stack_interval = (
+        config.frame_stack_interval if args.frame_stack_interval is None else args.frame_stack_interval
+    )
     args.pccm_prediction_frames = config.pccm_prediction_frames
     args.pccm_halo_width = config.pccm_halo_width
     args.pccm_wall_margin = config.pccm_wall_margin
     args.pccm_upper_field_threshold = config.pccm_upper_field_threshold
     args.pccm_upper_field_cost = config.pccm_upper_field_cost
-    args.pccm_observation_mode = config.pccm_observation_mode
 
     empty_env = create_environment(args, "level_diagnostic_empty.json", render=args.render)
     try:
@@ -273,7 +278,7 @@ def main() -> None:
             config.pccm_wall_margin,
             config.pccm_upper_field_threshold,
             config.pccm_upper_field_cost,
-            config.pccm_observation_mode,
+            args.action_repeat,
         )
 
         agent = CNNPPOAgent(config)
