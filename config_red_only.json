@@ -1,0 +1,22 @@
+{
+  "episodes": 1000000,
+  "max_steps": 1000,
+  "max_total_frame_steps": 1000000,
+  "num_envs": 8,
+  "action_repeat": 1,
+  "frame_stack": 4,
+  "frame_stack_interval": 1,
+  "level_files": [
+    "level_6.json",
+    "level6_mirror.json"
+  ],
+  "seed": 0,
+  "rollout_steps": 1024,
+  "learning_rate": 0.0003,
+  "learning_rate_final": 0.00004,
+  "entropy_coef": 0.004,
+  "entropy_coef_final": 0.0015,
+  "observation_scales": "red_only",
+  "model_path": "checkpoints/lunai_red_only_seed0.pt",
+  "log_path": "training_logs/lunai_red_only_seed0.csv"
+}

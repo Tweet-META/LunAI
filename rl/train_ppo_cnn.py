@@ -1,0 +1,748 @@
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+import torch
+
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+from rl.cnn_observation_utils import CNNObservation, cnn_observation, cnn_observation_shapes, stack_cnn_observations
+from rl.parallel_touhou_env import ParallelTouhouEnvs
+from rl.ppo_cnn_agent import CNNPPOAgent, CNNPPOConfig, load_cnn_ppo_config
+from rl.touhou_rl_env import TouhouRLEnv
+from rl.training_utils import (
+    append_log,
+    compute_gae,
+    ensure_parent_dir,
+    linear_schedule,
+    parse_args_with_config,
+    training_limit_reached,
+    training_progress,
+    training_stop_reason,
+    write_log_header,
+)
+
+
+PCCM_LOG_COLUMNS = (
+    "mean_local_pccm",
+    "mean_blocked_movement_ratio",
+    "wall_time_ratio",
+    "action_stay",
+    "action_up",
+    "action_down",
+    "action_left",
+    "action_right",
+    "action_up_left",
+    "action_up_right",
+    "action_down_left",
+    "action_down_right",
+)
+
+
+# Return stable PCCM and action metrics for one completed episode.
+def episode_diagnostic_values(info: dict[str, object]) -> list[object]:
+    action_counts = list(info.get("action_counts", [0] * 9))
+    if len(action_counts) != 9:
+        action_counts = [0] * 9
+    return [
+        f"{float(info.get('mean_local_pccm', 0.0)):.6f}",
+        f"{float(info.get('mean_blocked_movement_ratio', 0.0)):.6f}",
+        f"{float(info.get('wall_time_ratio', 0.0)):.6f}",
+        *[int(count) for count in action_counts],
+    ]
+
+
+# Apply scheduled PPO hyperparameters before one update.
+def update_scheduled_hyperparams(agent: CNNPPOAgent, args: argparse.Namespace, counters: dict[str, int]) -> None:
+    progress = training_progress(args, counters)
+
+    entropy_coef_final = args.entropy_coef if args.entropy_coef_final < 0.0 else args.entropy_coef_final
+    learning_rate_final = args.learning_rate if args.learning_rate_final < 0.0 else args.learning_rate_final
+    agent.config.entropy_coef = linear_schedule(args.entropy_coef, entropy_coef_final, progress)
+
+    scheduled_lr = linear_schedule(args.learning_rate, learning_rate_final, progress)
+    for group in agent.optimizer.param_groups:
+        group["lr"] = scheduled_lr
+
+
+# Check that a loaded checkpoint matches the current observation shapes.
+def validate_checkpoint_shapes(
+    config: CNNPPOConfig,
+    shapes: dict[str, tuple[int, ...]],
+    frame_stack: int,
+    frame_stack_interval: int,
+    args_pccm_prediction_frames: int = 5,
+    args_pccm_halo_width: float = 32.0,
+    args_pccm_wall_margin: float = 0.12,
+    args_pccm_upper_field_threshold: float = 0.70,
+    args_pccm_upper_field_cost: float = 0.30,
+    args_pccm_observation_mode: str = "trajectory",
+    args_observation_scales: str = "full",
+    args_action_repeat: int | None = None,
+) -> None:
+    expected_pccm = (
+        config.pccm_prediction_frames,
+        config.pccm_halo_width,
+        config.pccm_wall_margin,
+        config.pccm_upper_field_threshold,
+        config.pccm_upper_field_cost,
+    )
+    environment_pccm = (
+        args_pccm_prediction_frames,
+        args_pccm_halo_width,
+        args_pccm_wall_margin,
+        args_pccm_upper_field_threshold,
+        args_pccm_upper_field_cost,
+    )
+    if expected_pccm != environment_pccm:
+        raise ValueError(
+            f"Checkpoint PCCM settings={expected_pccm}, but environment PCCM settings={environment_pccm}."
+        )
+    if config.pccm_observation_mode != args_pccm_observation_mode:
+        raise ValueError(
+            "Checkpoint PCCM observation mode="
+            f"{config.pccm_observation_mode}, but environment mode={args_pccm_observation_mode}."
+        )
+    if config.observation_scales != args_observation_scales:
+        raise ValueError(
+            "Checkpoint observation scales="
+            f"{config.observation_scales}, but requested scales={args_observation_scales}."
+        )
+    if config.frame_stack != frame_stack:
+        raise ValueError(
+            f"Checkpoint frame_stack={config.frame_stack}, but --frame-stack={frame_stack}."
+        )
+    if config.frame_stack_interval != frame_stack_interval:
+        raise ValueError(
+            "Checkpoint frame_stack_interval="
+            f"{config.frame_stack_interval}, but --frame-stack-interval={frame_stack_interval}."
+        )
+    if config.action_repeat is not None and args_action_repeat is not None and config.action_repeat != args_action_repeat:
+        raise ValueError(
+            f"Checkpoint action_repeat={config.action_repeat}, but --action-repeat={args_action_repeat}."
+        )
+    if config.red_shape != shapes["red"]:
+        raise ValueError(f"Checkpoint red_shape={config.red_shape}, but environment red_shape={shapes['red']}.")
+    if config.yellow_shape != shapes["yellow"]:
+        raise ValueError(f"Checkpoint yellow_shape={config.yellow_shape}, but environment yellow_shape={shapes['yellow']}.")
+    if config.blue_shape != shapes["blue"]:
+        raise ValueError(f"Checkpoint blue_shape={config.blue_shape}, but environment blue_shape={shapes['blue']}.")
+    if config.player_dim != shapes["player"][0]:
+        raise ValueError(f"Checkpoint player_dim={config.player_dim}, but environment player_dim={shapes['player'][0]}.")
+
+
+# Create common environment settings for one local or worker environment.
+def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -> dict[str, object]:
+    return {
+        "render_mode": render_mode,
+        "max_steps": args.max_steps,
+        "action_repeat": args.action_repeat,
+        "level_file": args.level_file,
+        "level_files": args.level_files,
+        "level_spawn_time_jitter": args.level_spawn_time_jitter,
+        "random_player_start": args.random_player_start,
+        "player_start_margin": args.player_start_margin,
+        "frame_stack": args.frame_stack,
+        "frame_stack_interval": args.frame_stack_interval,
+        "pccm_prediction_frames": args.pccm_prediction_frames,
+        "pccm_halo_width": args.pccm_halo_width,
+        "pccm_wall_margin": args.pccm_wall_margin,
+        "pccm_upper_field_threshold": args.pccm_upper_field_threshold,
+        "pccm_upper_field_cost": args.pccm_upper_field_cost,
+        "pccm_observation_mode": args.pccm_observation_mode,
+    }
+
+
+# Create one shared CNN PPO agent from fresh shapes or a compatible checkpoint.
+def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -> CNNPPOAgent:
+    if args.load_path:
+        load_path = Path(args.load_path)
+        config = load_cnn_ppo_config(str(load_path), device=args.device)
+        args.architecture_version = config.architecture_version
+        validate_checkpoint_shapes(
+            config,
+            shapes,
+            args.frame_stack,
+            args.frame_stack_interval,
+            args.pccm_prediction_frames,
+            args.pccm_halo_width,
+            args.pccm_wall_margin,
+            args.pccm_upper_field_threshold,
+            args.pccm_upper_field_cost,
+            args.pccm_observation_mode,
+            args.observation_scales,
+            args.action_repeat,
+        )
+        config.gamma = args.gamma
+        config.gae_lambda = args.gae_lambda
+        config.learning_rate = args.learning_rate
+        config.clip_range = args.clip_range
+        config.entropy_coef = args.entropy_coef
+        config.value_coef = args.value_coef
+        config.max_grad_norm = args.max_grad_norm
+        config.update_epochs = args.update_epochs
+        config.minibatch_size = args.minibatch_size
+        config.target_kl = args.target_kl
+        agent = CNNPPOAgent(config)
+        agent.load(str(load_path))
+        for group in agent.optimizer.param_groups:
+            group["lr"] = args.learning_rate
+        print(f"Loaded CNN PPO checkpoint from {load_path}")
+    else:
+        agent = CNNPPOAgent(
+            CNNPPOConfig(
+                red_shape=shapes["red"],
+                yellow_shape=shapes["yellow"],
+                blue_shape=shapes["blue"],
+                player_dim=shapes["player"][0],
+                architecture_version=args.architecture_version,
+                observation_scales=args.observation_scales,
+                pccm_prediction_frames=args.pccm_prediction_frames,
+                pccm_halo_width=args.pccm_halo_width,
+                pccm_wall_margin=args.pccm_wall_margin,
+                pccm_upper_field_threshold=args.pccm_upper_field_threshold,
+                pccm_upper_field_cost=args.pccm_upper_field_cost,
+                pccm_observation_mode=args.pccm_observation_mode,
+                frame_stack=args.frame_stack,
+                frame_stack_interval=args.frame_stack_interval,
+                action_repeat=args.action_repeat,
+                action_dim=9,
+                hidden_dim=args.hidden_dim,
+                gamma=args.gamma,
+                gae_lambda=args.gae_lambda,
+                learning_rate=args.learning_rate,
+                clip_range=args.clip_range,
+                entropy_coef=args.entropy_coef,
+                value_coef=args.value_coef,
+                max_grad_norm=args.max_grad_norm,
+                update_epochs=args.update_epochs,
+                minibatch_size=args.minibatch_size,
+                target_kl=args.target_kl,
+                device=args.device,
+            )
+        )
+
+    print(f"Using device: {agent.device}")
+    print(f"Observation scales: {agent.config.observation_scales}")
+    return agent
+
+
+# Restore cumulative counters while starting a fresh environment episode.
+def restored_training_counters(agent: CNNPPOAgent, single_env: bool = False) -> dict[str, int]:
+    counters = {
+        "episode": 1,
+        "update": 0,
+        "global_step": 0,
+        "total_frame_steps": 0,
+    }
+    for key in counters:
+        if key in agent.training_state:
+            counters[key] = int(agent.training_state[key])
+    if single_env:
+        counters.update(
+            {
+                "episode_frame_steps": 0,
+                "episode_reward": 0,
+                "episode_collisions": 0,
+                "last_done": 0,
+            }
+        )
+    return counters
+
+
+# Write a new log header or append when continuing the same run.
+def prepare_training_log(path: Path, args: argparse.Namespace, include_env_id: bool) -> None:
+    if args.load_path and path.exists() and path.stat().st_size > 0:
+        print(f"Appending training log: {path}")
+        return
+    write_log_header(
+        path,
+        vars(args),
+        include_env_id=include_env_id,
+        extra_columns=PCCM_LOG_COLUMNS,
+    )
+
+
+# Save stable counters together with the model and optimizer.
+def save_training_checkpoint(agent: CNNPPOAgent, path: Path, counters: dict[str, int]) -> None:
+    training_state = {
+        key: int(counters[key])
+        for key in ("episode", "update", "global_step", "total_frame_steps")
+    }
+    agent.save(str(path), training_state=training_state)
+
+
+# Compute GAE separately for each parallel environment timeline.
+def compute_parallel_gae(
+    rewards: list[np.ndarray],
+    dones: list[np.ndarray],
+    values: list[np.ndarray],
+    last_values: np.ndarray,
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    rewards_array = np.asarray(rewards, dtype=np.float32)
+    dones_array = np.asarray(dones, dtype=bool)
+    values_array = np.asarray(values, dtype=np.float32)
+    advantages = np.zeros_like(rewards_array, dtype=np.float32)
+    returns = np.zeros_like(rewards_array, dtype=np.float32)
+
+    for env_id in range(rewards_array.shape[1]):
+        env_advantages, env_returns = compute_gae(
+            rewards_array[:, env_id].tolist(),
+            dones_array[:, env_id].tolist(),
+            values_array[:, env_id].tolist(),
+            float(last_values[env_id]),
+            gamma,
+            gae_lambda,
+        )
+        advantages[:, env_id] = env_advantages
+        returns[:, env_id] = env_returns
+
+    return advantages.reshape(-1), returns.reshape(-1)
+
+
+# Flatten time-major batches into one PPO update batch.
+def flatten_parallel_states(states: list[CNNObservation]) -> CNNObservation:
+    if not states:
+        raise ValueError("Cannot flatten an empty parallel rollout.")
+    return {
+        key: np.concatenate([state[key] for state in states], axis=0).astype(np.float32)
+        for key in ("red", "yellow", "blue", "player")
+    }
+
+# Collect one on-policy rollout from the environment.
+def collect_rollout(
+    env: TouhouRLEnv,
+    agent: CNNPPOAgent,
+    state: CNNObservation,
+    args: argparse.Namespace,
+    counters: dict[str, int],
+    log_path: Path,
+    latest_metrics: dict[str, float],
+) -> tuple[dict[str, list], CNNObservation]:
+    rollout = {
+        "states": [],
+        "actions": [],
+        "log_probs": [],
+        "rewards": [],
+        "dones": [],
+        "values": [],
+    }
+    episode_reward = counters.get("episode_reward", 0.0)
+    episode_collisions = counters.get("episode_collisions", 0)
+    last_info = {}
+
+    while (
+        len(rollout["states"]) < args.rollout_steps
+        and counters["episode"] <= args.episodes
+        and not training_limit_reached(args, counters)
+    ):
+        action, log_prob, value = agent.select_action(state)
+        next_observation, reward, done, info = env.step(action)
+        next_state = cnn_observation(next_observation, env.get_map_history())
+
+        rollout["states"].append(state)
+        rollout["actions"].append(action)
+        rollout["log_probs"].append(log_prob)
+        rollout["rewards"].append(float(reward))
+        rollout["dones"].append(bool(done))
+        rollout["values"].append(value)
+
+        state = next_state
+        episode_reward += float(reward)
+        # The nonterminal experiment counted every contact frame here.
+        # episode_collisions += int(info.get("contact_frames", int(info.get("collided", False))))
+        episode_collisions += int(info.get("collided", False))
+        counters["global_step"] += 1
+        current_frame_steps = int(info.get("frame_steps", 0))
+        frame_delta = max(0, current_frame_steps - counters["episode_frame_steps"])
+        counters["episode_frame_steps"] = current_frame_steps
+        counters["total_frame_steps"] += frame_delta
+        last_info = info
+
+        if done:
+            append_log(
+                log_path,
+                [
+                    counters["episode"],
+                    counters["update"],
+                    counters["global_step"],
+                    counters["total_frame_steps"],
+                    info.get("decision_steps", 0),
+                    info.get("frame_steps", 0),
+                    f"{episode_reward:.6f}",
+                    f"{latest_metrics.get('policy_loss', 0.0):.6f}",
+                    f"{latest_metrics.get('value_loss', 0.0):.6f}",
+                    f"{latest_metrics.get('entropy', 0.0):.6f}",
+                    f"{latest_metrics.get('approx_kl', 0.0):.6f}",
+                    info.get("hp", 0),
+                    episode_collisions,
+                    *episode_diagnostic_values(info),
+                    0,
+                ],
+            )
+            print(
+                f"episode={counters['episode']}, update={counters['update']}, decision_steps={info.get('decision_steps', 0)}, "
+                f"frame_steps={info.get('frame_steps', 0)}, total_frame_steps={counters['total_frame_steps']}, reward={episode_reward:.3f}, "
+                f"policy_loss={latest_metrics.get('policy_loss', 0.0):.5f}, value_loss={latest_metrics.get('value_loss', 0.0):.5f}, "
+                f"entropy={latest_metrics.get('entropy', 0.0):.5f}, kl={latest_metrics.get('approx_kl', 0.0):.5f}, "
+                f"hp={info.get('hp', 0)}, collisions={episode_collisions}"
+            )
+            counters["episode"] += 1
+            episode_reward = 0.0
+            episode_collisions = 0
+            counters["episode_frame_steps"] = 0
+            if counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
+                observation = env.reset(seed=args.seed + counters["episode"])
+                state = cnn_observation(observation, env.get_map_history())
+
+    counters["episode_reward"] = episode_reward
+    counters["episode_collisions"] = episode_collisions
+    counters["last_done"] = bool(last_info and last_info.get("collided", False))
+    return rollout, state
+
+
+# Collect one rollout from several independent environment timelines.
+def collect_parallel_rollout(
+    envs: ParallelTouhouEnvs,
+    agent: CNNPPOAgent,
+    states: list[CNNObservation],
+    args: argparse.Namespace,
+    counters: dict[str, int],
+    episode_rewards: np.ndarray,
+    episode_collisions: np.ndarray,
+    episode_frame_steps: np.ndarray,
+    next_reset_seed: int,
+    log_path: Path,
+    latest_metrics: dict[str, float],
+) -> tuple[dict[str, list], list[CNNObservation], int]:
+    rollout = {
+        "states": [],
+        "actions": [],
+        "log_probs": [],
+        "rewards": [],
+        "dones": [],
+        "values": [],
+    }
+    steps_per_env = args.rollout_steps // args.num_envs
+
+    for _ in range(steps_per_env):
+        if counters["episode"] > args.episodes or training_limit_reached(args, counters):
+            break
+
+        state_batch = stack_cnn_observations(states)
+        actions, log_probs, values = agent.select_actions_batch(state_batch)
+        transitions = envs.step(actions.tolist())
+        rewards = np.zeros(args.num_envs, dtype=np.float32)
+        dones = np.zeros(args.num_envs, dtype=bool)
+        next_states: list[CNNObservation] = []
+        reset_seeds: dict[int, int] = {}
+
+        for env_id, (next_state, reward, done, info) in enumerate(transitions):
+            next_states.append(next_state)
+            rewards[env_id] = reward
+            dones[env_id] = done
+            episode_rewards[env_id] += reward
+            episode_collisions[env_id] += int(info.get("collided", False))
+            current_frame_steps = int(info.get("frame_steps", 0))
+            frame_delta = max(0, current_frame_steps - int(episode_frame_steps[env_id]))
+            episode_frame_steps[env_id] = current_frame_steps
+            counters["global_step"] += 1
+            counters["total_frame_steps"] += frame_delta
+
+            if done and counters["episode"] <= args.episodes:
+                append_log(
+                    log_path,
+                    [
+                        counters["episode"],
+                        counters["update"],
+                        counters["global_step"],
+                        counters["total_frame_steps"],
+                        info.get("decision_steps", 0),
+                        info.get("frame_steps", 0),
+                        f"{episode_rewards[env_id]:.6f}",
+                        f"{latest_metrics.get('policy_loss', 0.0):.6f}",
+                        f"{latest_metrics.get('value_loss', 0.0):.6f}",
+                        f"{latest_metrics.get('entropy', 0.0):.6f}",
+                        f"{latest_metrics.get('approx_kl', 0.0):.6f}",
+                        info.get("hp", 0),
+                        int(episode_collisions[env_id]),
+                        *episode_diagnostic_values(info),
+                        env_id,
+                    ],
+                )
+                print(
+                    f"episode={counters['episode']}, env_id={env_id}, update={counters['update']}, "
+                    f"decision_steps={info.get('decision_steps', 0)}, frame_steps={info.get('frame_steps', 0)}, "
+                    f"total_frame_steps={counters['total_frame_steps']}, reward={episode_rewards[env_id]:.3f}, "
+                    f"policy_loss={latest_metrics.get('policy_loss', 0.0):.5f}, "
+                    f"value_loss={latest_metrics.get('value_loss', 0.0):.5f}, "
+                    f"entropy={latest_metrics.get('entropy', 0.0):.5f}, "
+                    f"kl={latest_metrics.get('approx_kl', 0.0):.5f}, hp={info.get('hp', 0)}, "
+                    f"collisions={int(episode_collisions[env_id])}"
+                )
+                counters["episode"] += 1
+                episode_rewards[env_id] = 0.0
+                episode_collisions[env_id] = 0
+                episode_frame_steps[env_id] = 0
+                if counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
+                    reset_seeds[env_id] = next_reset_seed
+                    next_reset_seed += 1
+
+        if reset_seeds:
+            reset_states = envs.reset_indices(reset_seeds)
+            for env_id, reset_state in reset_states.items():
+                next_states[env_id] = reset_state
+
+        rollout["states"].append(state_batch)
+        rollout["actions"].append(actions)
+        rollout["log_probs"].append(log_probs)
+        rollout["rewards"].append(rewards)
+        rollout["dones"].append(dones)
+        rollout["values"].append(values)
+        states = next_states
+
+    return rollout, states, next_reset_seed
+
+
+# Train one CNN PPO policy with several CPU environment workers.
+def train_parallel(args: argparse.Namespace) -> None:
+    if args.render or args.render_debug:
+        raise ValueError("Rendering only supports --num-envs 1.")
+    if args.rollout_steps % args.num_envs != 0:
+        raise ValueError("--rollout-steps must be divisible by --num-envs.")
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    envs = ParallelTouhouEnvs(args.num_envs, build_env_kwargs(args))
+
+    try:
+        states = envs.reset([args.seed + env_id for env_id in range(args.num_envs)])
+        shapes = {key: tuple(value.shape) for key, value in states[0].items()}
+        agent = create_agent(args, shapes)
+        log_path = Path(args.log_path)
+        model_path = Path(args.model_path)
+        prepare_training_log(log_path, args, include_env_id=True)
+        ensure_parent_dir(model_path)
+        counters = restored_training_counters(agent)
+        if agent.training_state:
+            resume_seed = args.seed + counters["episode"]
+            states = envs.reset([resume_seed + env_id for env_id in range(args.num_envs)])
+            print(
+                f"Resuming counters: episode={counters['episode']}, update={counters['update']}, "
+                f"decision_steps={counters['global_step']}, frame_steps={counters['total_frame_steps']}"
+            )
+        episode_rewards = np.zeros(args.num_envs, dtype=np.float32)
+        episode_collisions = np.zeros(args.num_envs, dtype=np.int64)
+        episode_frame_steps = np.zeros(args.num_envs, dtype=np.int64)
+        next_reset_seed = args.seed + counters["episode"] + args.num_envs
+        latest_metrics = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0}
+        print(f"Parallel environments: {args.num_envs}")
+
+        while counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
+            rollout, states, next_reset_seed = collect_parallel_rollout(
+                envs,
+                agent,
+                states,
+                args,
+                counters,
+                episode_rewards,
+                episode_collisions,
+                episode_frame_steps,
+                next_reset_seed,
+                log_path,
+                latest_metrics,
+            )
+            if not rollout["states"]:
+                break
+
+            last_values = agent.state_values_batch(stack_cnn_observations(states))
+            advantages, returns = compute_parallel_gae(
+                rollout["rewards"],
+                rollout["dones"],
+                rollout["values"],
+                last_values,
+                args.gamma,
+                args.gae_lambda,
+            )
+            update_scheduled_hyperparams(agent, args, counters)
+            latest_metrics = agent.update(
+                flatten_parallel_states(rollout["states"]),
+                np.asarray(rollout["actions"], dtype=np.int64).reshape(-1),
+                np.asarray(rollout["log_probs"], dtype=np.float32).reshape(-1),
+                returns,
+                advantages,
+            )
+            counters["update"] += 1
+
+            if counters["update"] % args.save_interval == 0:
+                save_training_checkpoint(agent, model_path, counters)
+
+        save_training_checkpoint(agent, model_path, counters)
+        print(
+            f"Training finished: reason={training_stop_reason(args, counters)}, "
+            f"episodes_completed={counters['episode'] - 1}, decision_steps={counters['global_step']}, "
+            f"total_frame_steps={counters['total_frame_steps']}"
+        )
+    finally:
+        envs.close()
+
+
+# Train a CNN PPO agent on the Touhou RL environment.
+def train(args: argparse.Namespace) -> None:
+    if args.num_envs > 1:
+        train_parallel(args)
+        return
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    env = TouhouRLEnv(
+        render_mode="human" if args.render or args.render_debug else None,
+        max_steps=args.max_steps,
+        action_repeat=args.action_repeat,
+        level_file=args.level_file,
+        level_files=args.level_files,
+        level_spawn_time_jitter=args.level_spawn_time_jitter,
+        random_player_start=args.random_player_start,
+        player_start_margin=args.player_start_margin,
+        frame_stack=args.frame_stack,
+        frame_stack_interval=args.frame_stack_interval,
+        pccm_prediction_frames=args.pccm_prediction_frames,
+        pccm_halo_width=args.pccm_halo_width,
+        pccm_wall_margin=args.pccm_wall_margin,
+        pccm_upper_field_threshold=args.pccm_upper_field_threshold,
+        pccm_upper_field_cost=args.pccm_upper_field_cost,
+        pccm_observation_mode=args.pccm_observation_mode,
+        render_debug=args.render_debug,
+    )
+    first_observation = env.reset(seed=args.seed)
+    shapes = cnn_observation_shapes(first_observation, env.get_map_history())
+    agent = create_agent(args, shapes)
+
+    log_path = Path(args.log_path)
+    model_path = Path(args.model_path)
+    prepare_training_log(log_path, args, include_env_id=True)
+    ensure_parent_dir(model_path)
+
+    counters = restored_training_counters(agent, single_env=True)
+    if agent.training_state:
+        first_observation = env.reset(seed=args.seed + counters["episode"])
+        print(
+            f"Resuming counters: episode={counters['episode']}, update={counters['update']}, "
+            f"decision_steps={counters['global_step']}, frame_steps={counters['total_frame_steps']}"
+        )
+    state = cnn_observation(first_observation, env.get_map_history())
+    latest_metrics = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0}
+
+    try:
+        while counters["episode"] <= args.episodes and not training_limit_reached(args, counters):
+            rollout, state = collect_rollout(env, agent, state, args, counters, log_path, latest_metrics)
+            if not rollout["states"]:
+                break
+
+            last_value = 0.0 if rollout["dones"][-1] else agent.state_value(state)
+            advantages, returns = compute_gae(
+                rollout["rewards"],
+                rollout["dones"],
+                rollout["values"],
+                last_value,
+                args.gamma,
+                args.gae_lambda,
+            )
+            update_scheduled_hyperparams(agent, args, counters)
+            latest_metrics = agent.update(
+                stack_cnn_observations(rollout["states"]),
+                np.asarray(rollout["actions"], dtype=np.int64),
+                np.asarray(rollout["log_probs"], dtype=np.float32),
+                returns,
+                advantages,
+            )
+            counters["update"] += 1
+
+            if counters["update"] % args.save_interval == 0:
+                save_training_checkpoint(agent, model_path, counters)
+
+        save_training_checkpoint(agent, model_path, counters)
+        print(
+            f"Training finished: reason={training_stop_reason(args, counters)}, "
+            f"episodes_completed={counters['episode'] - 1}, decision_steps={counters['global_step']}, "
+            f"total_frame_steps={counters['total_frame_steps']}"
+        )
+    finally:
+        env.close()
+
+
+# Build the command line parser for CNN PPO training.
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="")
+    parser.add_argument("--episodes", type=int, default=300)
+    parser.add_argument("--max-steps", type=int, default=1800)
+    parser.add_argument("--max-total-frame-steps", type=int, default=0)
+    parser.add_argument("--max-total-decision-steps", type=int, default=0)
+    parser.add_argument("--num-envs", type=int, default=1)
+    parser.add_argument("--action-repeat", type=int, default=3)
+    parser.add_argument("--frame-stack", type=int, choices=range(1, 6), default=1)
+    parser.add_argument("--frame-stack-interval", type=int, choices=range(1, 6), default=1)
+    parser.add_argument("--level-file", type=str, default="level_1.json")
+    parser.add_argument("--level-files", nargs="*", default=[])
+    parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
+    parser.add_argument("--random-player-start", action="store_true")
+    parser.add_argument("--player-start-margin", type=float, default=80.0)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--rollout-steps", type=int, default=2048)
+    parser.add_argument("--minibatch-size", type=int, default=256)
+    parser.add_argument("--update-epochs", type=int, default=4)
+    parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--pccm-prediction-frames", type=int, default=5)
+    parser.add_argument("--pccm-halo-width", type=float, default=32.0)
+    parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
+    parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
+    parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
+    parser.add_argument(
+        "--pccm-observation-mode",
+        choices=("occupancy_only", "static", "trajectory"),
+        default="trajectory",
+    )
+    parser.add_argument(
+        "--observation-scales",
+        choices=("red_only", "red_blue", "full"),
+        default="full",
+    )
+    parser.add_argument("--gae-lambda", type=float, default=0.95)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--learning-rate-final", type=float, default=-1.0)
+    parser.add_argument("--clip-range", type=float, default=0.2)
+    parser.add_argument("--entropy-coef", type=float, default=0.02)
+    parser.add_argument("--entropy-coef-final", type=float, default=-1.0)
+    parser.add_argument("--value-coef", type=float, default=0.5)
+    parser.add_argument("--max-grad-norm", type=float, default=0.5)
+    parser.add_argument("--target-kl", type=float, default=0.03)
+    parser.add_argument("--hidden-dim", type=int, default=128)
+    parser.add_argument("--architecture-version", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--save-interval", type=int, default=5)
+    parser.add_argument("--load-path", type=str, default="")
+    parser.add_argument("--model-path", type=str, default="checkpoints/ppo_cnn_baseline.pt")
+    parser.add_argument("--log-path", type=str, default="training_logs/ppo_cnn_log.csv")
+    parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--render", action="store_true")
+    parser.add_argument("--render-debug", action="store_true")
+    return parser
+
+
+# Parse arguments and start CNN PPO training.
+def main() -> None:
+    parser = build_arg_parser()
+    train(parse_args_with_config(parser))
+
+
+if __name__ == "__main__":
+    main()

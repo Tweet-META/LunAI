@@ -1,0 +1,169 @@
+{
+  "length": 23.2,
+  "name": "boss_continuous_random",
+  "description": "One moving boss continuously fires dense random bullets while sweeping left and right.",
+  "enemies": [
+    {
+      "start_position": [
+        300,
+        100
+      ],
+      "trajectory": [
+        [
+          240,
+          100
+        ],
+        [
+          180,
+          100
+        ],
+        [
+          140,
+          100
+        ],
+        [
+          180,
+          100
+        ],
+        [
+          240,
+          100
+        ],
+        [
+          300,
+          100
+        ],
+        [
+          360,
+          100
+        ],
+        [
+          420,
+          100
+        ],
+        [
+          460,
+          100
+        ],
+        [
+          420,
+          100
+        ],
+        [
+          360,
+          100
+        ],
+        [
+          300,
+          100
+        ],
+        [
+          240,
+          100
+        ],
+        [
+          180,
+          100
+        ],
+        [
+          140,
+          100
+        ],
+        [
+          180,
+          100
+        ],
+        [
+          240,
+          100
+        ],
+        [
+          300,
+          100
+        ],
+        [
+          360,
+          100
+        ],
+        [
+          420,
+          100
+        ],
+        [
+          460,
+          100
+        ],
+        [
+          420,
+          100
+        ],
+        [
+          360,
+          100
+        ],
+        [
+          300,
+          100
+        ]
+      ],
+      "speed": 1.0,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 1000000,
+      "attacks": [
+        [
+          "long_random",
+          20,
+          84,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          145,
+          0.2,
+          0.275,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "nothing"
+        ],
+        "probabilities": [
+          100
+        ]
+      },
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

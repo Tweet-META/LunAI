@@ -1,0 +1,363 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+
+import numpy as np
+import torch
+from torch import nn
+from torch.distributions import Categorical
+from torch.nn import functional as F
+
+from rl.cnn_observation_utils import CNNObservation
+
+
+CURRENT_ARCHITECTURE_VERSION = 2
+OBSERVATION_SCALE_SETS = {
+    "red_only": ("red",),
+    "red_blue": ("red", "blue"),
+    "full": ("red", "yellow", "blue"),
+}
+
+
+# Return the map scales enabled for one observation baseline.
+def observation_scale_names(observation_scales: str) -> tuple[str, ...]:
+    try:
+        return OBSERVATION_SCALE_SETS[observation_scales]
+    except KeyError as error:
+        choices = ", ".join(OBSERVATION_SCALE_SETS)
+        raise ValueError(
+            f"Unsupported observation_scales={observation_scales!r}. Choose from: {choices}."
+        ) from error
+
+
+@dataclass
+class CNNPPOConfig:
+    red_shape: tuple[int, int, int]
+    yellow_shape: tuple[int, int, int]
+    blue_shape: tuple[int, int, int]
+    player_dim: int
+    architecture_version: int = CURRENT_ARCHITECTURE_VERSION
+    observation_scales: str = "full"
+    pccm_prediction_frames: int = 5
+    pccm_halo_width: float = 32.0
+    pccm_wall_margin: float = 0.12
+    pccm_upper_field_threshold: float = 0.70
+    pccm_upper_field_cost: float = 0.30
+    pccm_observation_mode: str = "trajectory"
+    frame_stack: int = 1
+    frame_stack_interval: int = 1
+    action_repeat: int | None = None
+    action_dim: int = 9
+    hidden_dim: int = 128
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    learning_rate: float = 1e-4
+    clip_range: float = 0.2
+    entropy_coef: float = 0.02
+    value_coef: float = 0.5
+    max_grad_norm: float = 0.5
+    update_epochs: int = 4
+    minibatch_size: int = 256
+    target_kl: float = 0.03
+    device: str = "auto"
+
+
+class CNNActorCritic(nn.Module):
+    # Create a multi-branch actor-critic network for map observations.
+    def __init__(self, config: CNNPPOConfig):
+        super().__init__()
+        self.active_scales = observation_scale_names(config.observation_scales)
+        if config.architecture_version == 1:
+            scale_feature_dims = {"red": 32 * 8 * 8, "yellow": 16 * 4 * 4, "blue": 16 * 2 * 2}
+            self.red_encoder = nn.Sequential(
+                nn.Conv2d(config.red_shape[0], 16, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(16, 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((8, 8)),
+                nn.Flatten(),
+            )
+            self.yellow_encoder = nn.Sequential(
+                nn.Conv2d(config.yellow_shape[0], 16, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((4, 4)),
+                nn.Flatten(),
+            )
+            self.blue_encoder = nn.Sequential(
+                nn.Conv2d(config.blue_shape[0], 16, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((2, 2)),
+                nn.Flatten(),
+            )
+        elif config.architecture_version == 2:
+            scale_feature_dims = {"red": 64 * 8 * 8, "yellow": 64 * 4 * 4, "blue": 64 * 2 * 2}
+            self.red_encoder = nn.Sequential(
+                nn.Conv2d(config.red_shape[0], 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((8, 8)),
+                nn.Flatten(),
+            )
+            self.yellow_encoder = nn.Sequential(
+                nn.Conv2d(config.yellow_shape[0], 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((4, 4)),
+                nn.Flatten(),
+            )
+            self.blue_encoder = nn.Sequential(
+                nn.Conv2d(config.blue_shape[0], 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.AdaptiveAvgPool2d((2, 2)),
+                nn.Flatten(),
+            )
+        else:
+            raise ValueError(f"Unsupported CNN architecture version: {config.architecture_version}.")
+
+        feature_dim = sum(scale_feature_dims.values()) + 32
+
+        self.player_encoder = nn.Sequential(
+            nn.Linear(config.player_dim, 32),
+            nn.ReLU(),
+        )
+        self.trunk = nn.Sequential(
+            nn.Linear(feature_dim, config.hidden_dim),
+            nn.ReLU(),
+            nn.Linear(config.hidden_dim, config.hidden_dim // 2),
+            nn.ReLU(),
+        )
+        self.actor = nn.Linear(config.hidden_dim // 2, config.action_dim)
+        self.critic = nn.Linear(config.hidden_dim // 2, 1)
+
+    # Return action logits and state value.
+    def forward(self, states: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+        spatial_features = []
+        for scale in ("red", "yellow", "blue"):
+            scale_state = states[scale]
+            if scale not in self.active_scales:
+                scale_state = torch.zeros_like(scale_state)
+            spatial_features.append(getattr(self, f"{scale}_encoder")(scale_state))
+        player_features = self.player_encoder(states["player"])
+        features = torch.cat([*spatial_features, player_features], dim=1)
+        trunk_features = self.trunk(features)
+        logits = self.actor(trunk_features)
+        values = self.critic(trunk_features).squeeze(-1)
+        return logits, values
+
+
+class CNNPPOAgent:
+    # Create the CNN PPO model and optimizer.
+    def __init__(self, config: CNNPPOConfig):
+        self.config = config
+        self.device = self._select_device(config.device)
+        self.model = CNNActorCritic(config).to(self.device)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.learning_rate)
+        self.train_steps = 0
+        self.training_state: dict[str, int] = {}
+
+    # Choose CPU or CUDA for training.
+    def _select_device(self, requested_device: str) -> torch.device:
+        if requested_device == "auto":
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device(requested_device)
+
+    # Convert numpy state arrays into tensors on the agent device.
+    def _state_to_tensors(self, state: CNNObservation, batched: bool = False) -> dict[str, torch.Tensor]:
+        tensors = {
+            key: torch.as_tensor(value, dtype=torch.float32, device=self.device)
+            for key, value in state.items()
+        }
+        if not batched:
+            tensors = {key: value.unsqueeze(0) for key, value in tensors.items()}
+        return tensors
+
+    # Sample one action from the current policy.
+    def select_action(self, state: CNNObservation) -> tuple[int, float, float]:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(state)
+            logits, values = self.model(state_tensors)
+            distribution = Categorical(logits=logits)
+            action = distribution.sample()
+            log_prob = distribution.log_prob(action)
+        return int(action.item()), float(log_prob.item()), float(values.item())
+
+    # Sample one action for every state in a batched observation.
+    def select_actions_batch(self, states: CNNObservation) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(states, batched=True)
+            logits, values = self.model(state_tensors)
+            distribution = Categorical(logits=logits)
+            actions = distribution.sample()
+            log_probs = distribution.log_prob(actions)
+        return (
+            actions.detach().cpu().numpy().astype(np.int64),
+            log_probs.detach().cpu().numpy().astype(np.float32),
+            values.detach().cpu().numpy().astype(np.float32),
+        )
+
+    # Choose the highest-probability action for evaluation.
+    def select_greedy_action(self, state: CNNObservation) -> int:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(state)
+            logits, _ = self.model(state_tensors)
+        return int(torch.argmax(logits, dim=1).item())
+
+    # Return action probabilities for debugging.
+    def action_probs(self, state: CNNObservation) -> np.ndarray:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(state)
+            logits, _ = self.model(state_tensors)
+            probs = torch.softmax(logits, dim=-1).squeeze(0)
+        return probs.detach().cpu().numpy()
+
+    # Return the critic value for one state.
+    def state_value(self, state: CNNObservation) -> float:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(state)
+            _, value = self.model(state_tensors)
+        return float(value.item())
+
+    # Return one value estimate for every state in a batched observation.
+    def state_values_batch(self, states: CNNObservation) -> np.ndarray:
+        with torch.no_grad():
+            state_tensors = self._state_to_tensors(states, batched=True)
+            _, values = self.model(state_tensors)
+        return values.detach().cpu().numpy().astype(np.float32)
+
+    # Evaluate stored actions under the current policy.
+    def evaluate_actions(
+        self,
+        states: CNNObservation,
+        actions: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        state_tensors = self._state_to_tensors(states, batched=True)
+        logits, values = self.model(state_tensors)
+        distribution = Categorical(logits=logits)
+        log_probs = distribution.log_prob(actions)
+        entropy = distribution.entropy()
+        return log_probs, entropy, values
+
+    # Update the policy with one rollout.
+    def update(
+        self,
+        states: CNNObservation,
+        actions: np.ndarray,
+        old_log_probs: np.ndarray,
+        returns: np.ndarray,
+        advantages: np.ndarray,
+    ) -> dict[str, float]:
+        actions_tensor = torch.as_tensor(actions, dtype=torch.int64, device=self.device)
+        old_log_probs_tensor = torch.as_tensor(old_log_probs, dtype=torch.float32, device=self.device)
+        returns_tensor = torch.as_tensor(returns, dtype=torch.float32, device=self.device)
+        advantages_tensor = torch.as_tensor(advantages, dtype=torch.float32, device=self.device)
+        advantages_tensor = (advantages_tensor - advantages_tensor.mean()) / (advantages_tensor.std(unbiased=False) + 1e-8)
+
+        policy_losses = []
+        value_losses = []
+        entropies = []
+        approx_kls = []
+        batch_size = actions.shape[0]
+        indices = np.arange(batch_size)
+
+        for _ in range(self.config.update_epochs):
+            np.random.shuffle(indices)
+            for start in range(0, len(indices), self.config.minibatch_size):
+                batch_indices = indices[start:start + self.config.minibatch_size]
+                batch_states: CNNObservation = {
+                    key: value[batch_indices]
+                    for key, value in states.items()
+                }
+                batch_actions = actions_tensor[batch_indices]
+                batch_old_log_probs = old_log_probs_tensor[batch_indices]
+                batch_returns = returns_tensor[batch_indices]
+                batch_advantages = advantages_tensor[batch_indices]
+
+                new_log_probs, entropy, values = self.evaluate_actions(batch_states, batch_actions)
+                log_ratio = new_log_probs - batch_old_log_probs
+                ratio = torch.exp(log_ratio)
+                unclipped_loss = ratio * batch_advantages
+                clipped_loss = torch.clamp(ratio, 1.0 - self.config.clip_range, 1.0 + self.config.clip_range) * batch_advantages
+                policy_loss = -torch.min(unclipped_loss, clipped_loss).mean()
+                value_loss = F.mse_loss(values, batch_returns)
+                entropy_loss = entropy.mean()
+                loss = policy_loss + self.config.value_coef * value_loss - self.config.entropy_coef * entropy_loss
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.config.max_grad_norm)
+                self.optimizer.step()
+
+                with torch.no_grad():
+                    approx_kl = ((ratio - 1.0) - log_ratio).mean()
+                policy_losses.append(float(policy_loss.item()))
+                value_losses.append(float(value_loss.item()))
+                entropies.append(float(entropy_loss.item()))
+                approx_kls.append(float(approx_kl.item()))
+                self.train_steps += 1
+
+            if approx_kls and approx_kls[-1] > self.config.target_kl:
+                break
+
+        return {
+            "policy_loss": float(np.mean(policy_losses)) if policy_losses else 0.0,
+            "value_loss": float(np.mean(value_losses)) if value_losses else 0.0,
+            "entropy": float(np.mean(entropies)) if entropies else 0.0,
+            "approx_kl": float(np.mean(approx_kls)) if approx_kls else 0.0,
+        }
+
+    # Save the model and training metadata.
+    def save(self, path: str, training_state: dict[str, int] | None = None) -> None:
+        saved_training_state = dict(training_state or self.training_state)
+        torch.save(
+            {
+                "model": self.model.state_dict(),
+                "optimizer": self.optimizer.state_dict(),
+                "config": asdict(self.config),
+                "train_steps": self.train_steps,
+                "training_state": saved_training_state,
+            },
+            path,
+        )
+
+    # Load model weights and optimizer state.
+    def load(self, path: str) -> None:
+        checkpoint = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(checkpoint["model"])
+        self.optimizer.load_state_dict(checkpoint["optimizer"])
+        self.train_steps = int(checkpoint.get("train_steps", 0))
+        self.training_state = {
+            str(key): int(value)
+            for key, value in checkpoint.get("training_state", {}).items()
+        }
+
+
+# Load a CNN PPO config dictionary from a checkpoint.
+def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
+    checkpoint = torch.load(path, map_location="cpu")
+    config_data = dict(checkpoint["config"])
+    config_data.setdefault("architecture_version", 1)
+    config_data.setdefault("observation_scales", "full")
+    config_data.setdefault("pccm_prediction_frames", 5)
+    config_data.setdefault("pccm_halo_width", 32.0)
+    config_data.setdefault("pccm_wall_margin", 0.12)
+    config_data.setdefault("pccm_upper_field_threshold", 0.70)
+    # Old checkpoints were trained before the upper-field PCCM prior existed.
+    config_data.setdefault("pccm_upper_field_cost", 0.0)
+    config_data.setdefault("pccm_observation_mode", "trajectory")
+    config_data.setdefault("frame_stack", 1)
+    config_data.setdefault("frame_stack_interval", 1)
+    config_data.setdefault("action_repeat", None)
+    config_data["red_shape"] = tuple(config_data["red_shape"])
+    config_data["yellow_shape"] = tuple(config_data["yellow_shape"])
+    config_data["blue_shape"] = tuple(config_data["blue_shape"])
+    config_data["device"] = device
+    return CNNPPOConfig(**config_data)
