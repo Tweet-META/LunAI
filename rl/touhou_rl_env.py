@@ -331,9 +331,8 @@ class TouhouRLEnv:
 
         self.scene.render(self.screen, self.clock)
         if self.render_debug and self.last_observation is not None:
-            from tools.visualization_debug import draw_observation_panels, draw_realtime_overlay
+            from tools.visualization_debug import draw_observation_panels
 
-            draw_realtime_overlay(self.screen, self.last_observation, (self.GAME_ZONE[0], self.GAME_ZONE[1]), show_grids=True)
             draw_observation_panels(self.screen, self.last_observation)
         self._draw_reward_panel()
         pygame.display.flip()

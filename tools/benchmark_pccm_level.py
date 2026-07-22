@@ -37,7 +37,7 @@ def create_builder(implementation: str) -> ObservationBuilder:
             red_size=(128, 128),
             red_map=(64, 64),
             pccm_prediction_frames=5,
-            pccm_halo_width=24.0,
+            pccm_halo_width=32.0,
             pccm_wall_margin=0.12,
             pccm_soft_cap=0.8,
             pccm_implementation=implementation,

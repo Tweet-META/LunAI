@@ -83,10 +83,10 @@ def consistency_metrics(
         )
         for window, sample_shape in scale_cases:
             reference = pccm_sample_components_reference(
-                bullets, 3.0, window, sample_shape, 600, 700, 5, 24.0, 0.12
+                bullets, 3.0, window, sample_shape, 600, 700, 5, 32.0, 0.12
             )
             optimized = pccm_sample_components_roi(
-                bullets, 3.0, window, sample_shape, 600, 700, 5, 24.0, 0.12
+                bullets, 3.0, window, sample_shape, 600, 700, 5, 32.0, 0.12
             )
             for reference_map, optimized_map in zip(reference[:3], optimized[:3]):
                 difference = np.abs(reference_map - optimized_map)
@@ -118,7 +118,7 @@ def benchmark_implementation(
             600,
             700,
             5,
-            24.0,
+            32.0,
             0.12,
             0.8,
             implementation=implementation,
@@ -137,7 +137,7 @@ def benchmark_implementation(
                 600,
                 700,
                 5,
-                24.0,
+                32.0,
                 0.12,
                 0.8,
                 implementation=implementation,
