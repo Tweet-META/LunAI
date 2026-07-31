@@ -21,17 +21,23 @@ def set_stationary_side_path(enemy: dict, x_position: int) -> None:
     ]
 
 
-# Configure downward random-cone bullets for one pressure source.
+# Configure one downward rectangular bullet wall.
 def set_attack_pressure(enemy: dict) -> None:
-    random_attack = enemy["attacks"][0]
-
-    random_attack[0] = "long_random_cone"
-    random_attack[1] = 7
-    random_attack[2] = 13
-    random_attack[4:4] = [180, 20]
-    random_attack[7] = 0.35
-    random_attack[8] = 3.8 / 12
-    enemy["attacks"] = [random_attack]
+    bullet_data = enemy["attacks"][0][3]
+    enemy["attacks"] = [
+        [
+            "rectangle_wall",
+            25,
+            6,
+            bullet_data,
+            360,
+            100,
+            180,
+            145,
+            0.35,
+            0,
+        ]
+    ]
 
 
 # Create one enemy from the Level 6 attack template.
@@ -52,10 +58,8 @@ def build_level() -> dict:
 
     for phase_index, phase_start in enumerate(phase_starts):
         left_is_heavy = phase_index % 2 == 0
-        heavy_positions = [100, 220] if left_is_heavy else [380, 500]
-
-        for offset, x_position in enumerate(heavy_positions):
-            enemies.append(make_enemy(template, phase_start + offset * 0.35, x_position))
+        wall_center = 180 if left_is_heavy else 420
+        enemies.append(make_enemy(template, phase_start, wall_center))
 
     return {
         "length": 46.0,
