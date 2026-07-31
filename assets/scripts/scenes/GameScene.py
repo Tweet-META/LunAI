@@ -225,6 +225,30 @@ class GameScene(Scene):
                                 rand_center=rand_cnt
                             )
                         )
+                    elif enemy.attack_data[i][0] == "rectangle_wall":
+                        _, columns, rows, bul_data, width, height, angle, spd, s_time, a_speed = \
+                            enemy.attack_data[i]
+                        attack_data.append(
+                            (
+                                AttackFunctions.rectangle_wall,
+                                s_time,
+                                [
+                                    Vector2.zero(),
+                                    columns,
+                                    rows,
+                                    BulletData(
+                                        SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
+                                        Collider(bul_data[3], bul_data[4]),
+                                        sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
+                                    ),
+                                    width,
+                                    height,
+                                    angle,
+                                    spd,
+                                    a_speed,
+                                ],
+                            )
+                        )
                     elif enemy.attack_data[i][0] == "wide_cone":
                         _, bul_num, cone_num, bul_data, angle, spd, d_angle, s_time, delay, a_speed = enemy.attack_data[i]
                         attack_data.extend(

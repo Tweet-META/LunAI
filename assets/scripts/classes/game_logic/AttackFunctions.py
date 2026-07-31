@@ -71,6 +71,25 @@ class AttackFunctions:
         return bullets
 
     @staticmethod
+    def rectangle_wall(center: Vector2, columns: int, rows: int, bullet_data: BulletData,
+                       width: float, height: float, angle: float, speed: float,
+                       angular_speed: float = 0):
+        # Create a solid rectangular wall of bullets.
+        x_offsets = np.linspace(-width * 0.5, width * 0.5, columns)
+        y_offsets = np.linspace(0.0, height, rows)
+        return [
+            Bullet(
+                bullet_data,
+                center + Vector2(float(x_offset), float(y_offset)),
+                angle,
+                speed,
+                angular_speed,
+            )
+            for y_offset in y_offsets
+            for x_offset in x_offsets
+        ]
+
+    @staticmethod
     def cone(center: Vector2, angle, number_of_bullets: int, bullet_data: BulletData, speed: float, delta_angle: int, angular_speed=0, player: Player=None, enemy: Enemy=None):
         aimed_angle = angle if angle != "player" else AttackFunctions.aimed_angle(enemy.position, player.position)
         bullets = [
