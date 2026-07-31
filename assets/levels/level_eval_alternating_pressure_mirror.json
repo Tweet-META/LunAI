@@ -1,0 +1,1111 @@
+{
+  "length": 46.0,
+  "name": "evaluation_alternating_pressure_mirror",
+  "description": "Horizontally mirrored alternating-pressure evaluation level.",
+  "enemies": [
+    {
+      "start_position": [
+        500,
+        0
+      ],
+      "trajectory": [
+        [
+          500,
+          70
+        ],
+        [
+          500,
+          110
+        ],
+        [
+          500,
+          150
+        ],
+        [
+          500,
+          120
+        ],
+        [
+          500,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 0.5
+    },
+    {
+      "start_position": [
+        380,
+        0
+      ],
+      "trajectory": [
+        [
+          380,
+          70
+        ],
+        [
+          380,
+          110
+        ],
+        [
+          380,
+          150
+        ],
+        [
+          380,
+          120
+        ],
+        [
+          380,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 0.85
+    },
+    {
+      "start_position": [
+        220,
+        0
+      ],
+      "trajectory": [
+        [
+          220,
+          70
+        ],
+        [
+          220,
+          110
+        ],
+        [
+          220,
+          150
+        ],
+        [
+          220,
+          120
+        ],
+        [
+          220,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 7.0
+    },
+    {
+      "start_position": [
+        100,
+        0
+      ],
+      "trajectory": [
+        [
+          100,
+          70
+        ],
+        [
+          100,
+          110
+        ],
+        [
+          100,
+          150
+        ],
+        [
+          100,
+          120
+        ],
+        [
+          100,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 7.35
+    },
+    {
+      "start_position": [
+        500,
+        0
+      ],
+      "trajectory": [
+        [
+          500,
+          70
+        ],
+        [
+          500,
+          110
+        ],
+        [
+          500,
+          150
+        ],
+        [
+          500,
+          120
+        ],
+        [
+          500,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 13.5
+    },
+    {
+      "start_position": [
+        380,
+        0
+      ],
+      "trajectory": [
+        [
+          380,
+          70
+        ],
+        [
+          380,
+          110
+        ],
+        [
+          380,
+          150
+        ],
+        [
+          380,
+          120
+        ],
+        [
+          380,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 13.85
+    },
+    {
+      "start_position": [
+        220,
+        0
+      ],
+      "trajectory": [
+        [
+          220,
+          70
+        ],
+        [
+          220,
+          110
+        ],
+        [
+          220,
+          150
+        ],
+        [
+          220,
+          120
+        ],
+        [
+          220,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 20.0
+    },
+    {
+      "start_position": [
+        100,
+        0
+      ],
+      "trajectory": [
+        [
+          100,
+          70
+        ],
+        [
+          100,
+          110
+        ],
+        [
+          100,
+          150
+        ],
+        [
+          100,
+          120
+        ],
+        [
+          100,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 20.35
+    },
+    {
+      "start_position": [
+        500,
+        0
+      ],
+      "trajectory": [
+        [
+          500,
+          70
+        ],
+        [
+          500,
+          110
+        ],
+        [
+          500,
+          150
+        ],
+        [
+          500,
+          120
+        ],
+        [
+          500,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 26.5
+    },
+    {
+      "start_position": [
+        380,
+        0
+      ],
+      "trajectory": [
+        [
+          380,
+          70
+        ],
+        [
+          380,
+          110
+        ],
+        [
+          380,
+          150
+        ],
+        [
+          380,
+          120
+        ],
+        [
+          380,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 26.85
+    },
+    {
+      "start_position": [
+        220,
+        0
+      ],
+      "trajectory": [
+        [
+          220,
+          70
+        ],
+        [
+          220,
+          110
+        ],
+        [
+          220,
+          150
+        ],
+        [
+          220,
+          120
+        ],
+        [
+          220,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 33.0
+    },
+    {
+      "start_position": [
+        100,
+        0
+      ],
+      "trajectory": [
+        [
+          100,
+          70
+        ],
+        [
+          100,
+          110
+        ],
+        [
+          100,
+          150
+        ],
+        [
+          100,
+          120
+        ],
+        [
+          100,
+          -80
+        ]
+      ],
+      "speed": 0.9,
+      "sprite": {
+        "size": [
+          32,
+          32
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "spiky_ball.png"
+        ]
+      },
+      "collider": {
+        "radius": 16,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 25,
+      "attacks": [
+        [
+          "long_random_cone",
+          7,
+          13,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "ellipse_bullet_0.png"
+            ],
+            24,
+            24,
+            6,
+            [
+              0,
+              0
+            ]
+          ],
+          180,
+          20,
+          145,
+          0.35,
+          0.31666666666666665,
+          0,
+          false
+        ]
+      ],
+      "drop": {
+        "list": [
+          "points",
+          "power_small",
+          "nothing"
+        ],
+        "probabilities": [
+          50,
+          20,
+          30
+        ]
+      },
+      "clear_on_death": false,
+      "time": 33.35
+    }
+  ]
+}
