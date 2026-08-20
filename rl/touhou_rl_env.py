@@ -57,6 +57,7 @@ class TouhouRLEnv:
         pccm_wall_margin: float = 0.12,
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
+        render_fps: int | None = None,
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -94,6 +95,9 @@ class TouhouRLEnv:
         from observation_builder import ObservationBuilder, ObservationConfig
 
         self.FPS = FPS
+        self.render_fps = self.FPS if render_fps is None else int(render_fps)
+        if self.render_fps <= 0:
+            raise ValueError(f"render_fps must be positive, got {render_fps}.")
         self.GAME_ZONE = GAME_ZONE
         self.SIZE = SIZE
         self.Vector2 = Vector2
@@ -333,7 +337,7 @@ class TouhouRLEnv:
             draw_observation_panels(self.screen, self.last_observation)
         self._draw_reward_panel()
         pygame.display.flip()
-        self.clock.tick(self.FPS)
+        self.clock.tick(self.render_fps)
 
     # Release pygame and database resources.
     def close(self) -> None:

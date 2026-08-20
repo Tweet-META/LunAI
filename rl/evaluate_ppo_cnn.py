@@ -14,12 +14,13 @@ if str(PROJECT_DIR) not in sys.path:
 
 from rl.cnn_observation_utils import cnn_observation, cnn_observation_shapes
 from rl.ppo_cnn_agent import CNNPPOAgent, load_cnn_ppo_config
+from rl.th06_adapter import Th06ObservationAdapter, Th06ProcessBackend, Th06RLEnv
 from rl.touhou_rl_env import TouhouRLEnv
 from rl.train_ppo_cnn import validate_checkpoint_shapes
 
 
 # Print policy probabilities with action names from highest to lowest.
-def print_action_probs(env: TouhouRLEnv, probs: np.ndarray) -> None:
+def print_action_probs(env: TouhouRLEnv | Th06RLEnv, probs: np.ndarray) -> None:
     order = np.argsort(probs)[::-1]
     summary = ", ".join(f"{env.ACTIONS[int(i)]}={probs[int(i)]:.3f}" for i in order)
     print(f"action_probs: {summary}")
@@ -64,24 +65,49 @@ def evaluate(args: argparse.Namespace) -> None:
     args.frame_stack_interval = (
         config.frame_stack_interval if args.frame_stack_interval is None else args.frame_stack_interval
     )
-    env = TouhouRLEnv(
-        render_mode="human" if args.render or args.render_debug else None,
-        max_steps=args.max_steps,
-        action_repeat=args.action_repeat,
-        level_file=args.level_file,
-        level_files=args.level_files,
-        level_spawn_time_jitter=args.level_spawn_time_jitter,
-        random_player_start=args.random_player_start,
-        player_start_margin=args.player_start_margin,
-        frame_stack=args.frame_stack,
-        frame_stack_interval=args.frame_stack_interval,
-        pccm_prediction_frames=config.pccm_prediction_frames,
-        pccm_halo_width=config.pccm_halo_width,
-        pccm_wall_margin=config.pccm_wall_margin,
-        pccm_upper_field_threshold=config.pccm_upper_field_threshold,
-        pccm_upper_field_cost=config.pccm_upper_field_cost,
-        render_debug=args.render_debug,
-    )
+    if args.environment == "pygame":
+        env: TouhouRLEnv | Th06RLEnv = TouhouRLEnv(
+            render_mode="human" if args.render or args.render_debug else None,
+            max_steps=args.max_steps,
+            action_repeat=args.action_repeat,
+            level_file=args.level_file,
+            level_files=args.level_files,
+            level_spawn_time_jitter=args.level_spawn_time_jitter,
+            random_player_start=args.random_player_start,
+            player_start_margin=args.player_start_margin,
+            frame_stack=args.frame_stack,
+            frame_stack_interval=args.frame_stack_interval,
+            pccm_prediction_frames=config.pccm_prediction_frames,
+            pccm_halo_width=config.pccm_halo_width,
+            pccm_wall_margin=config.pccm_wall_margin,
+            pccm_upper_field_threshold=config.pccm_upper_field_threshold,
+            pccm_upper_field_cost=config.pccm_upper_field_cost,
+            render_fps=args.render_fps,
+            render_debug=args.render_debug,
+        )
+    else:
+        if args.action_repeat != 1:
+            raise ValueError("The native TH06 environment requires --action-repeat 1.")
+        backend = Th06ProcessBackend(args.th06_server_path, args.th06_assets_dir or None)
+        adapter = Th06ObservationAdapter(
+            pccm_prediction_frames=config.pccm_prediction_frames,
+            pccm_halo_width=config.pccm_halo_width,
+            pccm_wall_margin=config.pccm_wall_margin,
+            pccm_upper_field_threshold=config.pccm_upper_field_threshold,
+            pccm_upper_field_cost=config.pccm_upper_field_cost,
+        )
+        env = Th06RLEnv(
+            backend=backend,
+            stage=args.th06_stage,
+            difficulty=args.th06_difficulty,
+            max_steps=args.max_steps,
+            frame_stack=args.frame_stack,
+            frame_stack_interval=args.frame_stack_interval,
+            render_mode="human" if args.render or args.render_debug else None,
+            render_fps=args.render_fps,
+            render_debug=args.render_debug,
+            observation_adapter=adapter,
+        )
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
     validate_checkpoint_shapes(
@@ -146,7 +172,7 @@ def evaluate(args: argparse.Namespace) -> None:
                     "policy_mode": "stochastic" if args.stochastic else "greedy",
                     "episode": episode,
                     "evaluation_seed": args.seed + episode,
-                    "level_file": env.current_level_file,
+                    "level_file": getattr(env, "current_level_file", f"th06_stage_{args.th06_stage}"),
                     "decision_steps": decisions,
                     "frame_steps": frames,
                     "episode_reward": total_reward,
@@ -179,6 +205,7 @@ def evaluate(args: argparse.Namespace) -> None:
 # Build the command line parser for CNN PPO evaluation.
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--environment", choices=("pygame", "th06"), default="pygame")
     parser.add_argument("--model-path", type=str, default="checkpoints/ppo_cnn_baseline.pt")
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=1800)
@@ -198,6 +225,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--print-action-probs", action="store_true")
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--render-debug", action="store_true")
+    parser.add_argument("--render-fps", type=int, default=None)
+    parser.add_argument("--th06-stage", type=int, choices=range(1, 8), default=1)
+    parser.add_argument("--th06-difficulty", type=int, choices=range(0, 5), default=1)
+    parser.add_argument(
+        "--th06-server-path",
+        type=str,
+        default="../external/th6_web/build-native/Release/th06_rl_server.exe",
+    )
+    parser.add_argument("--th06-assets-dir", type=str, default="")
     return parser
 
 

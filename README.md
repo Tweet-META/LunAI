@@ -41,6 +41,10 @@ python rl/train_ppo_cnn.py --config config.json --max-total-frame-steps 1000000
 
 Each new PPO log begins with a `# run_config:` JSON line containing the final effective parameters, including any command-line overrides.
 
+### Experimental Original TH06 Adapter
+
+An experimental standalone adapter built from `AgentMystia/th6_web` runs the original Touhou 6 logic as a native headless child process. It reads player, bullet, laser, and enemy state and converts it into the same multi-scale PCCM observation used by LunAI. Optional rendering is provided by the Python environment and is never enabled during headless training. See [docs/th06_native_adapter.md](docs/th06_native_adapter.md).
+
 `global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. Training and evaluation both end an episode on the first valid collision.
 
 Checkpoints store the action repeat, frame-stack settings, optimizer state, and cumulative training counters. Evaluation uses the saved environment settings unless they are explicitly overridden. Continued training appends to an existing log and resumes the cumulative schedule, while starting from a fresh environment episode.

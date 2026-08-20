@@ -59,10 +59,13 @@ def local_pccm_cost(observation: dict[str, np.ndarray]) -> float:
 def wall_proximity(observation: dict[str, np.ndarray], margin: float = WALL_PROXIMITY_MARGIN) -> float:
     if not 0.0 < margin <= 0.5:
         raise ValueError(f"Wall margin must be in (0, 0.5], got {margin}.")
-    player_x = float(np.clip(observation["player_features"][0], 0.0, 1.0))
-    player_y = float(np.clip(observation["player_features"][1], 0.0, 1.0))
-    horizontal = max(0.0, 1.0 - min(player_x, 1.0 - player_x) / margin)
-    vertical = max(0.0, 1.0 - min(player_y, 1.0 - player_y) / margin)
+    features = observation["player_features"]
+    left_margin = float(np.clip(features[4], 0.0, 1.0))
+    right_margin = float(np.clip(features[5], 0.0, 1.0))
+    top_margin = float(np.clip(features[6], 0.0, 1.0))
+    bottom_margin = float(np.clip(features[7], 0.0, 1.0))
+    horizontal = max(0.0, 1.0 - min(left_margin, right_margin) / margin)
+    vertical = max(0.0, 1.0 - min(top_margin, bottom_margin) / margin)
     return horizontal + vertical
 
 

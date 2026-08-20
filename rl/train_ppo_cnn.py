@@ -16,6 +16,12 @@ from rl.cnn_observation_utils import CNNObservation, cnn_observation, cnn_observ
 from rl.parallel_touhou_env import ParallelTouhouEnvs
 from rl.ppo_cnn_agent import CNNPPOAgent, CNNPPOConfig, load_cnn_ppo_config
 from rl.touhou_rl_env import TouhouRLEnv
+from rl.th06_adapter import (
+    TH06_DEFAULT_PCCM_HALO_WIDTH,
+    Th06ObservationAdapter,
+    Th06ProcessBackend,
+    Th06RLEnv,
+)
 from rl.training_utils import (
     append_log,
     compute_gae,
@@ -143,7 +149,42 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "pccm_wall_margin": args.pccm_wall_margin,
         "pccm_upper_field_threshold": args.pccm_upper_field_threshold,
         "pccm_upper_field_cost": args.pccm_upper_field_cost,
+        "render_fps": args.render_fps,
+        "render_debug": args.render_debug,
     }
+
+
+# Create the selected single-process game environment.
+def build_single_env(args: argparse.Namespace) -> TouhouRLEnv | Th06RLEnv:
+    if args.environment == "pygame":
+        return TouhouRLEnv(**build_env_kwargs(args, "human" if args.render or args.render_debug else None))
+    if args.num_envs != 1:
+        raise ValueError("The native TH06 environment currently supports --num-envs 1 only.")
+    if args.action_repeat != 1:
+        raise ValueError("The native TH06 environment advances one real frame per decision; use --action-repeat 1.")
+    backend = Th06ProcessBackend(
+        executable=args.th06_server_path,
+        assets_dir=args.th06_assets_dir or None,
+    )
+    adapter = Th06ObservationAdapter(
+        pccm_prediction_frames=args.pccm_prediction_frames,
+        pccm_halo_width=args.pccm_halo_width,
+        pccm_wall_margin=args.pccm_wall_margin,
+        pccm_upper_field_threshold=args.pccm_upper_field_threshold,
+        pccm_upper_field_cost=args.pccm_upper_field_cost,
+    )
+    return Th06RLEnv(
+        backend=backend,
+        stage=args.th06_stage,
+        difficulty=args.th06_difficulty,
+        max_steps=args.max_steps,
+        frame_stack=args.frame_stack,
+        frame_stack_interval=args.frame_stack_interval,
+        render_mode="human" if args.render or args.render_debug else None,
+        render_fps=args.render_fps,
+        render_debug=args.render_debug,
+        observation_adapter=adapter,
+    )
 
 
 # Create one shared CNN PPO agent from fresh shapes or a compatible checkpoint.
@@ -212,7 +253,6 @@ def create_agent(args: argparse.Namespace, shapes: dict[str, tuple[int, ...]]) -
         )
 
     print(f"Using device: {agent.device}")
-    print("Observation scales: full")
     return agent
 
 
@@ -302,7 +342,7 @@ def flatten_parallel_states(states: list[CNNObservation]) -> CNNObservation:
 
 # Collect one on-policy rollout from the environment.
 def collect_rollout(
-    env: TouhouRLEnv,
+    env: TouhouRLEnv | Th06RLEnv,
     agent: CNNPPOAgent,
     state: CNNObservation,
     args: argparse.Namespace,
@@ -497,6 +537,8 @@ def collect_parallel_rollout(
 
 # Train one CNN PPO policy with several CPU environment workers.
 def train_parallel(args: argparse.Namespace) -> None:
+    if args.environment != "pygame":
+        raise ValueError("Parallel sampling currently supports the pygame environment only.")
     if args.render or args.render_debug:
         raise ValueError("Rendering only supports --num-envs 1.")
     if args.rollout_steps % args.num_envs != 0:
@@ -580,6 +622,8 @@ def train_parallel(args: argparse.Namespace) -> None:
 
 # Train a CNN PPO agent on the Touhou RL environment.
 def train(args: argparse.Namespace) -> None:
+    if args.pccm_halo_width is None:
+        args.pccm_halo_width = TH06_DEFAULT_PCCM_HALO_WIDTH if args.environment == "th06" else 32.0
     if args.num_envs > 1:
         train_parallel(args)
         return
@@ -587,24 +631,7 @@ def train(args: argparse.Namespace) -> None:
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    env = TouhouRLEnv(
-        render_mode="human" if args.render or args.render_debug else None,
-        max_steps=args.max_steps,
-        action_repeat=args.action_repeat,
-        level_file=args.level_file,
-        level_files=args.level_files,
-        level_spawn_time_jitter=args.level_spawn_time_jitter,
-        random_player_start=args.random_player_start,
-        player_start_margin=args.player_start_margin,
-        frame_stack=args.frame_stack,
-        frame_stack_interval=args.frame_stack_interval,
-        pccm_prediction_frames=args.pccm_prediction_frames,
-        pccm_halo_width=args.pccm_halo_width,
-        pccm_wall_margin=args.pccm_wall_margin,
-        pccm_upper_field_threshold=args.pccm_upper_field_threshold,
-        pccm_upper_field_cost=args.pccm_upper_field_cost,
-        render_debug=args.render_debug,
-    )
+    env = build_single_env(args)
     first_observation = env.reset(seed=args.seed)
     shapes = cnn_observation_shapes(first_observation, env.get_map_history())
     agent = create_agent(args, shapes)
@@ -666,6 +693,7 @@ def train(args: argparse.Namespace) -> None:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="")
+    parser.add_argument("--environment", choices=("pygame", "th06"), default="pygame")
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--max-steps", type=int, default=1800)
     parser.add_argument("--max-total-frame-steps", type=int, default=0)
@@ -685,7 +713,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
-    parser.add_argument("--pccm-halo-width", type=float, default=32.0)
+    parser.add_argument("--pccm-halo-width", type=float, default=None)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
@@ -707,6 +735,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--render-debug", action="store_true")
+    parser.add_argument("--render-fps", type=int, default=60)
+    parser.add_argument("--th06-stage", type=int, choices=range(1, 8), default=1)
+    parser.add_argument("--th06-difficulty", type=int, choices=range(0, 5), default=1)
+    parser.add_argument(
+        "--th06-server-path",
+        type=str,
+        default="../external/th6_web/build-native/Release/th06_rl_server.exe",
+    )
+    parser.add_argument("--th06-assets-dir", type=str, default="")
     return parser
 
 

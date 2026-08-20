@@ -73,7 +73,7 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 10. 上方 70% 区域从分界线的 0 线性增加到顶部的 0.3，并与墙壁代价软叠加。
 11. 主线只保留 NumPy broadcasting 实现；ROI 和 `auto` 性能实验位于独立的 `experiments` 分支。
 
-未来轨迹在普通慢速子弹上可能不明显。例如 `145 px/s` 的子弹在五帧内只移动约 `12 px`；`600 px/s` 的诊断弹会移动约 `50 px`。这不是预测失效。
+未来轨迹在普通慢速子弹上可能不明显。例如 `145 px/s` 的子弹在五帧内只移动约 `12 px`；`600 px/s` 的高速子弹会移动约 `50 px`。这不是预测失效。
 
 ## 当前奖励结构
 
@@ -98,16 +98,6 @@ PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。Blocked mo
 - `config.json` 只保存当前实验有意覆盖的参数；省略项使用脚本默认值，命令行参数用于临时覆盖。
 - 每个 CSV 首行保存最终生效的 `# run_config`。
 - 正式训练关闭 `render` 和 `render_debug`；渲染只用于短暂验收。
-- 先在诊断课程验证最短链路，再进入复杂随机弹幕。
-- 高速关 `level_diagnostic_fast_aimed.json` 只用于肉眼检查 PCCM 未来轨迹，不加入正式训练池。
-
-当前基础诊断课程包含：
-
-- 空场；
-- 左、中、右三种小型自机狙；
-- 左、中、右三种大型自机狙。
-
-基础课程的验收目标是：无威胁时停住、来弹时短移、躲开后停下、左右来弹均能处理，并且不形成固定向下、固定单侧或冲角策略。
 
 ## 常用入口
 
@@ -115,12 +105,6 @@ PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。Blocked mo
 
 ```powershell
 python rl/train_ppo_cnn.py --config config.json
-```
-
-查看高速子弹的 PCCM 预测：
-
-```powershell
-python tools/realtime_observation_map.py --level-file level_diagnostic_fast_aimed.json
 ```
 
 ## 修改与验证规则
