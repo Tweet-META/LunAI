@@ -5,10 +5,11 @@ from assets.scripts.classes.game_logic.Collider import Collider
 from assets.scripts.math_and_data.Vector2 import Vector2
 from assets.scripts.math_and_data.enviroment import *
 from assets.scripts.math_and_data.functions import clamp
+from playfield_config import scale_distance
 
 
 class BulletCleaner:
-    def __init__(self, position: Vector2, increase_speed: int = 1000, give_points: bool = False, show_sprite: bool = True):
+    def __init__(self, position: Vector2, increase_speed: float | None = None, give_points: bool = False, show_sprite: bool = True):
         self.collider = Collider(
             0,
             position
@@ -16,7 +17,7 @@ class BulletCleaner:
 
         self.sprite = pygame.image.load(path_join("assets", "sprites", "effects", "player_death_effect.png")).convert_alpha()
 
-        self.increase_speed = increase_speed
+        self.increase_speed = scale_distance(1000) if increase_speed is None else increase_speed
         self.give_points = give_points
 
         self.kill = False

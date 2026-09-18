@@ -1,6 +1,6 @@
 {
   "episodes": 1000000,
-  "max_steps": 1000,
+  "max_steps": 1500,
   "max_total_frame_steps": 1000000,
   "action_repeat": 1,
   "frame_stack": 4,

@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import pygame
+import numpy as np
+
+
+BLUE_FILL = (70, 130, 255, 32)
+YELLOW_FILL = (255, 220, 70, 56)
+RED_FILL = (255, 70, 70, 76)
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+
+
+# Convert a playfield window into a screen-space rectangle.
+def _screen_rect(window: np.ndarray | tuple[int, int, int, int], game_origin: tuple[int, int]) -> pygame.Rect:
+    x1, y1, x2, y2 = [int(v) for v in window]
+    return pygame.Rect(game_origin[0] + x1, game_origin[1] + y1, x2 - x1, y2 - y1)
+
+
+# Keep one local observation window inside the playable field for rendering.
+def _visible_window(window: np.ndarray, field_window: np.ndarray) -> tuple[int, int, int, int]:
+    x1, y1, x2, y2 = [int(v) for v in window]
+    field_x1, field_y1, field_x2, field_y2 = [int(v) for v in field_window]
+    return (
+        max(x1, field_x1),
+        max(y1, field_y1),
+        min(x2, field_x2),
+        min(y2, field_y2),
+    )
+
+
+# Draw blue, yellow, and red observation zones over the game.
+def draw_zone_overlay(screen: pygame.Surface, observation: dict[str, np.ndarray], game_origin: tuple[int, int]) -> None:
+    draw_colored_rect(screen, _screen_rect(observation["_blue_window"], game_origin), BLUE_FILL, 2)
+    field_window = observation["_blue_window"]
+    yellow_window = _visible_window(observation["_yellow_window"], field_window)
+    red_window = _visible_window(observation["_red_window"], field_window)
+    draw_colored_rect(screen, _screen_rect(yellow_window, game_origin), YELLOW_FILL, 2)
+    draw_colored_rect(screen, _screen_rect(red_window, game_origin), RED_FILL, 3)
+
+
+# Draw one translucent filled rectangle with a black border.
+def draw_colored_rect(screen: pygame.Surface, rect: pygame.Rect, color: tuple[int, int, int, int], border_width: int) -> None:
+    overlay = pygame.Surface(rect.size, pygame.SRCALPHA)
+    overlay.fill(color)
+    screen.blit(overlay, rect.topleft)
+    pygame.draw.rect(screen, BLACK, rect, border_width)
+
+
+# Draw black grid lines for one observation window.
+def draw_grid_lines(
+    screen: pygame.Surface,
+    window: np.ndarray,
+    field_window: np.ndarray,
+    game_origin: tuple[int, int],
+    grid_shape: tuple[int, int],
+) -> None:
+    rect = _screen_rect(window, game_origin)
+    visible_rect = _screen_rect(_visible_window(window, field_window), game_origin)
+    rows, cols = grid_shape
+    for col in range(1, cols):
+        x = rect.left + round(rect.width * col / cols)
+        if visible_rect.left < x < visible_rect.right:
+            pygame.draw.line(screen, BLACK, (x, visible_rect.top), (x, visible_rect.bottom), 1)
+    for row in range(1, rows):
+        y = rect.top + round(rect.height * row / rows)
+        if visible_rect.top < y < visible_rect.bottom:
+            pygame.draw.line(screen, BLACK, (visible_rect.left, y), (visible_rect.right, y), 1)
+
+
+def draw_realtime_overlay(
+    screen: pygame.Surface,
+    observation: dict[str, np.ndarray],
+    game_origin: tuple[int, int],
+    show_grids: bool = True,
+) -> None:
+    # Draw live zone overlays and optional grid lines.
+    draw_zone_overlay(screen, observation, game_origin)
+    if show_grids:
+        field_window = observation["_blue_window"]
+        draw_grid_lines(screen, field_window, field_window, game_origin, observation["blue_density"].shape)
+        draw_grid_lines(screen, observation["_yellow_window"], field_window, game_origin, observation["yellow_density"].shape)
+        draw_grid_lines(screen, observation["_red_window"], field_window, game_origin, observation["red_occupancy"].shape)
+
+
+# Map a normalized value to a tinted heat color.
+def heat_color(value: float, tint: tuple[int, int, int]) -> tuple[int, int, int]:
+    value = float(np.clip(value, 0.0, 1.0))
+    base = int(30 + 210 * value)
+    return (
+        min(255, int(tint[0] * value + base * (1.0 - value))),
+        min(255, int(tint[1] * value + base * (1.0 - value))),
+        min(255, int(tint[2] * value + base * (1.0 - value))),
+    )
+
+
+def draw_heatmap_panel(
+    screen: pygame.Surface,
+    values: np.ndarray,
+    rect: pygame.Rect,
+    tint: tuple[int, int, int],
+    border_color: tuple[int, int, int] = BLACK,
+    valid_mask: np.ndarray | None = None,
+) -> None:
+    # Draw one fixed-size heatmap panel.
+    rows, cols = values.shape
+    cell_w = rect.width / cols
+    cell_h = rect.height / rows
+    pygame.draw.rect(screen, (18, 18, 18), rect)
+    for row in range(rows):
+        for col in range(cols):
+            cell = pygame.Rect(
+                round(rect.left + col * cell_w),
+                round(rect.top + row * cell_h),
+                max(1, round(cell_w)),
+                max(1, round(cell_h)),
+            )
+            color = heat_color(values[row, col], tint)
+            if valid_mask is not None and valid_mask[row, col] <= 0.0:
+                color = (8, 8, 8)
+            pygame.draw.rect(screen, color, cell)
+    pygame.draw.rect(screen, border_color, rect, 2)
+
+
+# Project one world-space window into a full-field PCCM panel.
+def _window_panel_rect(
+    window: np.ndarray,
+    field_window: np.ndarray,
+    panel_size: tuple[int, int],
+) -> pygame.Rect:
+    x1, y1, x2, y2 = [float(v) for v in window]
+    field_x1, field_y1, field_x2, field_y2 = [float(v) for v in field_window]
+    field_width = max(1.0, field_x2 - field_x1)
+    field_height = max(1.0, field_y2 - field_y1)
+    left = round((x1 - field_x1) / field_width * panel_size[0])
+    top = round((y1 - field_y1) / field_height * panel_size[1])
+    width = max(1, round((x2 - x1) / field_width * panel_size[0]))
+    height = max(1, round((y2 - y1) / field_height * panel_size[1]))
+    return pygame.Rect(left, top, width, height)
+
+
+# Draw one full-field PCCM with higher-resolution local maps layered on top.
+def draw_full_pccm_panel(
+    screen: pygame.Surface,
+    observation: dict[str, np.ndarray],
+    rect: pygame.Rect,
+) -> None:
+    panel = pygame.Surface(rect.size)
+    panel_rect = panel.get_rect()
+    field_window = observation["_blue_window"]
+    draw_heatmap_panel(panel, observation["blue_pccm"], panel_rect, (70, 130, 255))
+
+    layers = (
+        (
+            observation["yellow_pccm"],
+            observation["yellow_valid"],
+            observation["_yellow_window"],
+            (255, 220, 70),
+        ),
+        (
+            observation["red_pccm"],
+            observation["red_valid"],
+            observation["_red_window"],
+            (255, 70, 70),
+        ),
+    )
+    for values, valid_mask, window, tint in layers:
+        layer_rect = _window_panel_rect(window, field_window, rect.size)
+        draw_heatmap_panel(panel, values, layer_rect, tint, valid_mask=valid_mask)
+        visible_border = layer_rect.clip(panel_rect)
+        if visible_border.width > 0 and visible_border.height > 0:
+            pygame.draw.rect(panel, BLACK, visible_border, 2)
+
+    player_features = observation["player_features"]
+    marker_x = int(np.clip(round(float(player_features[0]) * rect.width), 0, rect.width - 1))
+    marker_y = int(np.clip(round(float(player_features[1]) * rect.height), 0, rect.height - 1))
+    pygame.draw.circle(panel, WHITE, (marker_x, marker_y), 4)
+    pygame.draw.circle(panel, BLACK, (marker_x, marker_y), 5, 2)
+    pygame.draw.rect(panel, BLACK, panel_rect, 2)
+    screen.blit(panel, rect.topleft)
+
+
+# Draw one full-field PCCM overview.
+def draw_observation_panels(screen: pygame.Surface, observation: dict[str, np.ndarray], origin: tuple[int, int] = (690, 420)) -> None:
+    x, y = origin
+    draw_full_pccm_panel(screen, observation, pygame.Rect(x, y, 260, 303))

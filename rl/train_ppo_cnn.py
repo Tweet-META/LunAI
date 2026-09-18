@@ -78,7 +78,7 @@ def validate_checkpoint_shapes(
     frame_stack: int,
     frame_stack_interval: int,
     args_pccm_prediction_frames: int = 5,
-    args_pccm_halo_width: float = 32.0,
+    args_pccm_halo_width: float = 20.0,
     args_pccm_wall_margin: float = 0.12,
     args_pccm_upper_field_threshold: float = 0.70,
     args_pccm_upper_field_cost: float = 0.30,
@@ -696,14 +696,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--level-files", nargs="*", default=[])
     parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
     parser.add_argument("--random-player-start", action="store_true")
-    parser.add_argument("--player-start-margin", type=float, default=80.0)
+    parser.add_argument("--player-start-margin", type=float, default=51.2)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--rollout-steps", type=int, default=2048)
     parser.add_argument("--minibatch-size", type=int, default=256)
     parser.add_argument("--update-epochs", type=int, default=4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--pccm-prediction-frames", type=int, default=5)
-    parser.add_argument("--pccm-halo-width", type=float, default=32.0)
+    parser.add_argument("--pccm-halo-width", type=float, default=20.0)
     parser.add_argument("--pccm-wall-margin", type=float, default=0.12)
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)

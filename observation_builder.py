@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from playfield_config import PCCM_HALO_WIDTH, PLAYFIELD_SIZE, RED_SIZE, YELLOW_SIZE
+
 
 PCCM_OBSERVATION_MODES = ("occupancy_only", "static", "trajectory")
 
@@ -27,15 +29,15 @@ class PlayerState:
 
 @dataclass(frozen=True)
 class ObservationConfig:
-    playfield_width: int = 600
-    playfield_height: int = 700
+    playfield_width: int = PLAYFIELD_SIZE[0]
+    playfield_height: int = PLAYFIELD_SIZE[1]
     blue_grid: tuple[int, int] = (8, 8)
-    yellow_size: tuple[int, int] = (320, 320)
+    yellow_size: tuple[int, int] = YELLOW_SIZE
     yellow_grid: tuple[int, int] = (16, 16)
-    red_size: tuple[int, int] = (128, 128)
+    red_size: tuple[int, int] = RED_SIZE
     red_map: tuple[int, int] = (64, 64)
     pccm_prediction_frames: int = 5
-    pccm_halo_width: float = 32.0
+    pccm_halo_width: float = PCCM_HALO_WIDTH
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30

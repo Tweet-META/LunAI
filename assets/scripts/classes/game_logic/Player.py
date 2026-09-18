@@ -7,6 +7,7 @@ from assets.scripts.math_and_data.Vector2 import Vector2
 
 from assets.scripts.math_and_data.functions import *
 from assets.scripts.math_and_data.enviroment import *
+from playfield_config import WORLD_SCALE, scale_distance
 
 
 class Player(Entity):
@@ -16,17 +17,26 @@ class Player(Entity):
         self.sprite_sheet: pygame.sprite = characters[id]['sprite-sheet']
         self.attack_function: callable = characters[id]['attack-function']
 
-        self.position: Vector2 = Vector2((GAME_ZONE[2] + GAME_ZONE[0] + self.sprite_sheet.x) // 2, GAME_ZONE[1] + GAME_ZONE[3] - 100)
-        self.speed: int = characters[id]['speed']
+        self.position: Vector2 = Vector2(GAME_ZONE[0] + GAME_ZONE[2] / 2, GAME_ZONE[1] + GAME_ZONE[3] - scale_distance(100))
+        self.speed: float = scale_distance(characters[id]['speed'])
 
-        self.collider = Collider(3)
+        self.collider = Collider(scale_distance(3))
 
-        self.hitbox_sprite = pygame.image.load(path_join("assets", "sprites", "effects", "player_hitbox.png")).convert_alpha()
+        raw_hitbox_sprite = pygame.image.load(path_join("assets", "sprites", "effects", "player_hitbox.png")).convert_alpha()
+        self.hitbox_sprite = pygame.transform.scale(
+            raw_hitbox_sprite,
+            (max(1, round(raw_hitbox_sprite.get_width() * WORLD_SCALE)),
+             max(1, round(raw_hitbox_sprite.get_height() * WORLD_SCALE))),
+        )
         self.hitbox_sprites = [pygame.transform.rotate(self.hitbox_sprite, n) for n in range(360)]
         self.change_hitbox_sprite_timer = 0
 
-        self.default_sprites = [self.sprite_sheet[i] for i in range(len(self.sprite_sheet))]
-        self.right_slope_sprites = [pygame.transform.rotate(self.sprite_sheet[i], 7) for i in range(len(self.sprite_sheet))]
+        self.default_sprites = [pygame.transform.scale(
+            self.sprite_sheet[i],
+            (max(1, round(self.sprite_sheet.sprite_size[0] * WORLD_SCALE)),
+             max(1, round(self.sprite_sheet.sprite_size[1] * WORLD_SCALE))),
+        ) for i in range(len(self.sprite_sheet))]
+        self.right_slope_sprites = [pygame.transform.rotate(sprite, 7) for sprite in self.default_sprites]
         self.left_slope_sprites = [pygame.transform.flip(sprite, flip_x=True, flip_y=False) for sprite in self.right_slope_sprites]
 
         self.points = 0
@@ -98,13 +108,13 @@ class Player(Entity):
 
         if self.reviving:
             self.invincibility_timer += 1 * 60 * delta_time
-            self.position += Vector2.up() * 2 * 60 * delta_time
+            self.position += Vector2.up() * scale_distance(2) * 60 * delta_time
 
             # If no HP left
-            if self.hp < 0 and self.position.y() <= GAME_ZONE[3] + GAME_ZONE[1] + 40:
+            if self.hp < 0 and self.position.y() <= GAME_ZONE[3] + GAME_ZONE[1] + scale_distance(40):
                 self.switch_to_scoreboard()
 
-            if self.position.y() <= GAME_ZONE[3] + GAME_ZONE[1] - 100:
+            if self.position.y() <= GAME_ZONE[3] + GAME_ZONE[1] - scale_distance(100):
                 self.reviving = False
                 self.invincibility_timer = 0
         else:
@@ -117,7 +127,7 @@ class Player(Entity):
     def shoot(self) -> None:
         if self.attack_timer >= 16:
             music_module.sounds[17](.1)
-            self.bullets += self.attack_function(self.position + Vector2.up() * 10, int(self.power))
+            self.bullets += self.attack_function(self.position + Vector2.up() * scale_distance(10), int(self.power))
             self.attack_timer = 0
 
     def get_damage(self):
@@ -125,7 +135,7 @@ class Player(Entity):
         self.scene.bullet_cleaner = BulletCleaner(self.position)
         self.hp -= 1
         self.reviving = True
-        self.position = Vector2(50 + (GAME_ZONE[2] - GAME_ZONE[0]) // 2, HEIGHT + 80)
+        self.position = Vector2(GAME_ZONE[0] + GAME_ZONE[2] / 2, GAME_ZONE[1] + GAME_ZONE[3] + scale_distance(80))
 
     def add_power(self, power: float):
         self.power += power

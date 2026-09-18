@@ -13,6 +13,7 @@ from assets.scripts.math_and_data.Vector2 import Vector2
 from assets.scripts.classes.game_logic.AttackFunctions import AttackFunctions
 
 from assets.scripts.math_and_data.enviroment import *
+from assets.scripts.math_and_data.level_scaling import scale_level
 
 from PIL import Image
 
@@ -58,7 +59,8 @@ class GameScene(Scene):
         self.effect_group = pygame.sprite.RenderPlain()
 
         self.time = 0
-        self.level = json.load(open(path_join("assets", "levels", self.level_file), encoding="utf-8"))
+        with open(path_join("assets", "levels", self.level_file), encoding="utf-8") as level_stream:
+            self.level = scale_level(json.load(level_stream), GAME_ZONE[2:4])
         self.level_enemies = sorted(self.level["enemies"], key=lambda enemy: enemy["time"])
         self.enemy_count = 0
 

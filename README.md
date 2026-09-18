@@ -5,7 +5,6 @@ This directory is a standalone copy of the pygame environment and the code used 
 ## Setup
 
 ```powershell
-cd experiments
 pip install -r requirements.txt
 ```
 

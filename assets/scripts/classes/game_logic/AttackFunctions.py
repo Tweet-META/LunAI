@@ -7,6 +7,7 @@ from assets.scripts.classes.game_logic.BulletData import BulletData
 from assets.scripts.classes.game_logic.Enemy import Enemy
 from assets.scripts.classes.game_logic.Player import Player
 from assets.scripts.math_and_data.Vector2 import Vector2
+from playfield_config import scale_distance
 
 
 class AttackFunctions:
@@ -131,7 +132,7 @@ class AttackFunctions:
                 AttackFunctions.ring,
                 round(start_time + delay * n, 3),
                 [Vector2.zero() if not rand_center else\
-            Vector2.one().rotate(random.randint(0, 360)) * 25, number_of_bullets, bullet_data, speed, angular_speed, n * delta_angle]
+            Vector2.one().rotate(random.randint(0, 360)) * scale_distance(25), number_of_bullets, bullet_data, speed, angular_speed, n * delta_angle]
             )
             for n in range(number_of_rings)
         ]
@@ -147,7 +148,7 @@ class AttackFunctions:
                 AttackFunctions.random,
                 round(start_time + delay * n, 3),
                 [Vector2.zero() if not rand_center else\
-            Vector2.one().rotate(random.randint(0, 360)) * 25, number_of_bullets, bullet_data, speed, angular_speed]
+            Vector2.one().rotate(random.randint(0, 360)) * scale_distance(25), number_of_bullets, bullet_data, speed, angular_speed]
             )
             for n in range(number_of_randoms)
         ]
@@ -165,7 +166,7 @@ class AttackFunctions:
                 round(start_time + delay * n, 3),
                 [
                     Vector2.zero() if not rand_center else
-                    Vector2.one().rotate(random.randint(0, 360)) * 25,
+                    Vector2.one().rotate(random.randint(0, 360)) * scale_distance(25),
                     number_of_bullets,
                     bullet_data,
                     angle,

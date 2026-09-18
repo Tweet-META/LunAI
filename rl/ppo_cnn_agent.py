@@ -9,6 +9,7 @@ from torch.distributions import Categorical
 from torch.nn import functional as F
 
 from rl.cnn_observation_utils import CNNObservation
+from playfield_config import PCCM_HALO_WIDTH
 
 
 CURRENT_ARCHITECTURE_VERSION = 2
@@ -39,7 +40,7 @@ class CNNPPOConfig:
     architecture_version: int = CURRENT_ARCHITECTURE_VERSION
     observation_scales: str = "full"
     pccm_prediction_frames: int = 5
-    pccm_halo_width: float = 32.0
+    pccm_halo_width: float = PCCM_HALO_WIDTH
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30
@@ -347,7 +348,7 @@ def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     config_data.setdefault("architecture_version", 1)
     config_data.setdefault("observation_scales", "full")
     config_data.setdefault("pccm_prediction_frames", 5)
-    config_data.setdefault("pccm_halo_width", 32.0)
+    config_data.setdefault("pccm_halo_width", PCCM_HALO_WIDTH)
     config_data.setdefault("pccm_wall_margin", 0.12)
     config_data.setdefault("pccm_upper_field_threshold", 0.70)
     # Old checkpoints were trained before the upper-field PCCM prior existed.

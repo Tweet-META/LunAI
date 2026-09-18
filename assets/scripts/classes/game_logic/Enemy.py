@@ -10,6 +10,7 @@ from assets.scripts.classes.game_logic.Entity import Entity
 from assets.scripts.math_and_data.enviroment import music_module
 from assets.scripts.math_and_data.functions import scale_sprite, set_alpha_sprite
 from assets.scripts.math_and_data.Splines import BasisSpline
+from playfield_config import WORLD_SCALE, scale_distance
 
 BSpline = BasisSpline()
 
@@ -40,7 +41,11 @@ class Enemy(Entity):
         self.attack_data: [(callable, float), ...] = attack_data
         self.attack_count = 0
 
-        self.sprite_sheet = sprite_sheet
+        self.sprite_sheet = [pygame.transform.scale(
+            sprite_sheet[i],
+            (max(1, round(sprite_sheet.sprite_size[0] * WORLD_SCALE)),
+             max(1, round(sprite_sheet.sprite_size[1] * WORLD_SCALE))),
+        ) for i in range(len(sprite_sheet))]
         self.current_sprite = 0
         self.change_sprite_timer = 10
 
@@ -115,7 +120,7 @@ class Enemy(Entity):
             music_module.sounds[23](.15)
 
             if self.clear_bullets_on_death:
-                self.scene.bullet_cleaner = BulletCleaner(self.position, give_points=True, show_sprite=False, increase_speed=2000)
+                self.scene.bullet_cleaner = BulletCleaner(self.position, give_points=True, show_sprite=False, increase_speed=scale_distance(2000))
 
             self.scene.effects.append(Effect(
                 position=self.position,
@@ -128,15 +133,15 @@ class Enemy(Entity):
             drop_item = None
             for drop in drops:
                 if drop == "power_large":
-                    drop_item = PowerItem(self.position + Vector2.random_int(-75, 75, -50, 0), True)
+                    drop_item = PowerItem(self.position + Vector2.random_int(-48, 48, -32, 0), True)
                 elif drop == "power_small":
-                    drop_item = PowerItem(self.position + Vector2.random_int(-75, 75, -50, 0), False)
+                    drop_item = PowerItem(self.position + Vector2.random_int(-48, 48, -32, 0), False)
                 elif drop == "points":
-                    drop_item = PointItem(self.position + Vector2.random_int(-75, 75, -50, 0))
+                    drop_item = PointItem(self.position + Vector2.random_int(-48, 48, -32, 0))
                 elif drop == "full_power":
-                    drop_item = FullPowerItem(self.position + Vector2.random_int(-75, 75, -50, 0))
+                    drop_item = FullPowerItem(self.position + Vector2.random_int(-48, 48, -32, 0))
                 elif drop == "1up":
-                    drop_item = OneUpItem(self.position + Vector2.random_int(-75, 75, -50, 0))
+                    drop_item = OneUpItem(self.position + Vector2.random_int(-48, 48, -32, 0))
 
                 if drop_item is not None:
                     self.scene.items.append(drop_item)

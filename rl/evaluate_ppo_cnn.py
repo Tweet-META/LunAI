@@ -192,7 +192,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--level-files", nargs="*", default=[])
     parser.add_argument("--level-spawn-time-jitter", type=float, default=0.0)
     parser.add_argument("--random-player-start", action="store_true")
-    parser.add_argument("--player-start-margin", type=float, default=80.0)
+    parser.add_argument("--player-start-margin", type=float, default=51.2)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--log-path", type=str, default="")

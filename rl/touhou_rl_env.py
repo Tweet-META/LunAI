@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 import pygame
+from playfield_config import PCCM_HALO_WIDTH, RED_SIZE, YELLOW_SIZE
 
 from rl.reward import (
     blocked_movement_ratio,
@@ -49,11 +50,11 @@ class TouhouRLEnv:
         level_files: Sequence[str] | None = None,
         level_spawn_time_jitter: float = 0.0,
         random_player_start: bool = False,
-        player_start_margin: float = 80.0,
+        player_start_margin: float = 51.2,
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
         pccm_prediction_frames: int = 5,
-        pccm_halo_width: float = 32.0,
+        pccm_halo_width: float = PCCM_HALO_WIDTH,
         pccm_wall_margin: float = 0.12,
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
@@ -105,9 +106,9 @@ class TouhouRLEnv:
                 playfield_width=GAME_ZONE[2],
                 playfield_height=GAME_ZONE[3],
                 blue_grid=(8, 8),
-                yellow_size=(320, 320),
+                yellow_size=YELLOW_SIZE,
                 yellow_grid=(16, 16),
-                red_size=(128, 128),
+                red_size=RED_SIZE,
                 red_map=(64, 64),
                 pccm_prediction_frames=self.pccm_prediction_frames,
                 pccm_halo_width=self.pccm_halo_width,

@@ -5,6 +5,7 @@ import pygame.transform
 from assets.scripts.classes.game_logic.BulletData import BulletData
 from assets.scripts.math_and_data.Vector2 import Vector2
 from assets.scripts.math_and_data.enviroment import *
+from playfield_config import scale_distance
 
 
 class Bullet:
@@ -47,10 +48,11 @@ class Bullet:
 
         self.angle += self.angular_speed * delta_time
         sprite = self.get_sprite()
-        if (self.position.x() - sprite.rect.w // 2 < GAME_ZONE[0] - 50 or
-            self.position.y() - sprite.rect.h // 2 < GAME_ZONE[1] - 50) or \
-                (self.position.x() + sprite.rect.w // 2 > GAME_ZONE[0] + GAME_ZONE[2] + 50 or
-                 self.position.y() + sprite.rect.h // 2 > GAME_ZONE[1] + GAME_ZONE[3] + 50):
+        margin = scale_distance(50)
+        if (self.position.x() - sprite.rect.w // 2 < GAME_ZONE[0] - margin or
+            self.position.y() - sprite.rect.h // 2 < GAME_ZONE[1] - margin) or \
+                (self.position.x() + sprite.rect.w // 2 > GAME_ZONE[0] + GAME_ZONE[2] + margin or
+                 self.position.y() + sprite.rect.h // 2 > GAME_ZONE[1] + GAME_ZONE[3] + margin):
             del self
             return False
         return True
