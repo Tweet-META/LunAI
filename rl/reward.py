@@ -4,10 +4,9 @@ import numpy as np
 
 
 SURVIVAL_REWARD = 0.1
-COLLISION_PENALTY = 50.0
+COLLISION_PENALTY = 0.0
 ACTION_CHANGE_PENALTY = 0.0
-PCCM_STATE_PENALTY_WEIGHT = 0.1
-BLOCKED_MOVEMENT_PENALTY_WEIGHT = 0.05
+WALL_PROXIMITY_PENALTY_WEIGHT = 0.1
 WALL_PROXIMITY_MARGIN = 0.12
 
 
@@ -93,13 +92,7 @@ def compute_frame_reward(
     if collided:
         return -COLLISION_PENALTY
 
-    pccm_penalty = PCCM_STATE_PENALTY_WEIGHT * local_pccm_cost(observation)
-    blocked_penalty = BLOCKED_MOVEMENT_PENALTY_WEIGHT * float(np.clip(blocked_ratio, 0.0, 1.0))
-    # action_change_penalty = ACTION_CHANGE_PENALTY if action != previous_action else 0.0
-
-    return (
-        SURVIVAL_REWARD
-        - pccm_penalty 
-        - blocked_penalty 
-        # - action_change_penalty
-    )
+    # PCCM remains an observation and diagnostic metric, not a hidden reward signal.
+    # Near a wall, remove at most the current frame's survival reward without going negative.
+    wall_penalty = WALL_PROXIMITY_PENALTY_WEIGHT * min(1.0, wall_proximity(observation))
+    return max(0.0, SURVIVAL_REWARD - wall_penalty)

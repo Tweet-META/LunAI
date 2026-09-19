@@ -13,6 +13,9 @@ ATTACK_SPATIAL_FIELDS = {
     "rectangle_wall": (4, 5, 7),
     "th06_aimed_circle": (4, 5),
     "th06_aimed_fan": (4, 5),
+    "th06_stage3_spell1": (),
+    "th06_stage3_spell2": (),
+    "th06_stage3_spell3": (),
 }
 
 

@@ -286,6 +286,27 @@ class GameScene(Scene):
                             )
                             for n in range(volley_num)
                         ])
+                    elif enemy.attack_data[i][0] == "th06_stage3_spell1":
+                        _, _, _, bul_data, start_time, duration = enemy.attack_data[i]
+                        attack_data.extend(
+                            AttackFunctions.th06_stage3_spell1(
+                                make_bullet_data(bul_data), start_time, duration
+                            )
+                        )
+                    elif enemy.attack_data[i][0] == "th06_stage3_spell2":
+                        _, _, _, bul_data, start_time, duration = enemy.attack_data[i]
+                        attack_data.extend(
+                            AttackFunctions.th06_stage3_spell2(
+                                make_bullet_data(bul_data), start_time, duration
+                            )
+                        )
+                    elif enemy.attack_data[i][0] == "th06_stage3_spell3":
+                        _, _, _, bul_data, start_time, duration = enemy.attack_data[i]
+                        attack_data.extend(
+                            AttackFunctions.th06_stage3_spell3(
+                                make_bullet_data(bul_data), start_time, duration
+                            )
+                        )
 
                 enemy.attack_data = sorted(attack_data, key=lambda x: x[1])
 

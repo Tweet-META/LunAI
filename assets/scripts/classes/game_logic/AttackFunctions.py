@@ -1,4 +1,5 @@
 import random
+import math
 
 import numpy as np
 
@@ -88,6 +89,139 @@ class AttackFunctions:
             for layer_index in range(number_of_layers)
             for bullet_index in range(number_of_bullets)
         ]
+
+    # Build one TH06-style ring from several interleaved bullet groups.
+    @staticmethod
+    def th06_multiring(center: Vector2, group_counts: list[int], bullet_data: BulletData,
+                       speed: float, base_angle: float, group_angle_step: float):
+        bullets = []
+        for group_index, count in enumerate(group_counts):
+            group_angle = base_angle + group_index * group_angle_step
+            bullets.extend(
+                Bullet(
+                    bullet_data,
+                    center,
+                    group_angle + bullet_index * 360.0 / count,
+                    speed,
+                )
+                for bullet_index in range(count)
+            )
+        return bullets
+
+    # Expand TH06 Stage 3 Spell 1's seven-frame rotating ring loop.
+    @staticmethod
+    def th06_stage3_spell1(bullet_data: BulletData, start_time: float, duration: float):
+        interval = 7.0 / 60.0
+        group_counts = [2, 3, 4, 2, 4, 3, 2]
+        group_step = -math.degrees(0.1134464)
+        sweep_step = math.degrees(0.1308997)
+        attacks = []
+        volley_count = int(duration / interval)
+        for volley in range(volley_count):
+            sweep_index = volley % 96
+            sweep = sweep_index if sweep_index < 48 else 96 - sweep_index
+            th06_angle = 50.0 + sweep * sweep_step
+            base_angle = -th06_angle - 90.0
+            attacks.append(
+                (
+                    AttackFunctions.th06_multiring,
+                    round(start_time + volley * interval, 6),
+                    [Vector2.zero(), group_counts, bullet_data, 2.6 * 60.0, base_angle, group_step],
+                )
+            )
+        return attacks
+
+    # Emit bullets with TH06's random initial velocity and fixed world-space acceleration.
+    @staticmethod
+    def th06_random_acceleration(center: Vector2, groups: list[list[float]], bullet_data: BulletData):
+        bullets = []
+        for count, acceleration_per_frame, acceleration_angle_degrees in groups:
+            acceleration = float(acceleration_per_frame) * 60.0 * 60.0
+            angle_radians = math.radians(float(acceleration_angle_degrees))
+            motion = {
+                "acceleration": [
+                    math.cos(angle_radians) * acceleration,
+                    math.sin(angle_radians) * acceleration,
+                ],
+                "acceleration_delay": 17.0 / 60.0,
+                "initial_speed_boost": 5.0 * 60.0,
+                "speed_boost_duration": 16.0 / 60.0,
+            }
+            for _ in range(int(count)):
+                th06_angle = random.uniform(-math.pi, math.pi)
+                speed = random.uniform(0.3, 1.0) * 60.0
+                bullets.append(
+                    Bullet(
+                        bullet_data,
+                        center,
+                        -math.degrees(th06_angle) - 90.0,
+                        speed,
+                        motion=motion,
+                    )
+                )
+        return bullets
+
+    # Expand TH06 Stage 3 Spell 2's alternating acceleration petals.
+    @staticmethod
+    def th06_stage3_spell2(bullet_data: BulletData, start_time: float, duration: float):
+        attacks = []
+        cycle_frames = 220
+        cycle = 0
+        while cycle * cycle_frames / 60.0 < duration:
+            cycle_start = start_time + cycle * cycle_frames / 60.0
+            for volley in range(20):
+                attacks.append(
+                    (
+                        AttackFunctions.th06_random_acceleration,
+                        round(cycle_start + volley * 4.0 / 60.0, 6),
+                        [Vector2.zero(), [[4, 0.027, 90.0]], bullet_data],
+                    )
+                )
+
+            second_phase = cycle_start + 160.0 / 60.0
+            for volley in range(20):
+                groups = [
+                    [1, 0.024, 180.0],
+                    [1, 0.024, 0.0],
+                    [1, 0.024, 135.0],
+                    [1, 0.024, 45.0],
+                ]
+                attacks.append(
+                    (
+                        AttackFunctions.th06_random_acceleration,
+                        round(second_phase + volley * 3.0 / 60.0, 6),
+                        [Vector2.zero(), groups, bullet_data],
+                    )
+                )
+            cycle += 1
+        return [attack for attack in attacks if attack[1] < start_time + duration]
+
+    # Expand TH06 Stage 3 Spell 3's two counter-rotating acceleration arms.
+    @staticmethod
+    def th06_stage3_spell3(bullet_data: BulletData, start_time: float, duration: float):
+        attacks = []
+        cycle_interval = 6.0 / 60.0
+        cycle_count = int(duration / cycle_interval)
+        for cycle in range(cycle_count):
+            rotation = cycle * 6.0
+            main_count = 3 if cycle * cycle_interval >= 20.0 else 2
+            events = [
+                (0, [[main_count, 0.016, -90.0 - rotation]]),
+                (1, [[1, 0.018, -rotation]]),
+                (2, [[1, 0.018, -180.0 - rotation]]),
+                (3, [[main_count, 0.016, 90.0 + rotation]]),
+                (4, [[1, 0.018, 180.0 + rotation]]),
+                (5, [[1, 0.016, rotation]]),
+            ]
+            for frame_offset, groups in events:
+                attacks.append(
+                    (
+                        AttackFunctions.th06_random_acceleration,
+                        round(start_time + cycle * cycle_interval + frame_offset / 60.0, 6),
+                        [Vector2.zero(), groups, bullet_data],
+                    )
+                )
+        return attacks
 
     @staticmethod
     def random_cone(center: Vector2, number_of_bullets: int, bullet_data: BulletData, angle: float,

@@ -9,7 +9,8 @@ from playfield_config import scale_distance
 
 
 class Bullet:
-    def __init__(self, bullet_data: BulletData,  position: Vector2, angle: float, speed: float, angular_speed=0):
+    def __init__(self, bullet_data: BulletData, position: Vector2, angle: float, speed: float, angular_speed=0,
+                 motion: dict | None = None):
 
         self.sprite_sheet = bullet_data.sprite_sheet
 
@@ -32,19 +33,48 @@ class Bullet:
 
         self.angle: float = angle
         self.speed: float = speed
+        self.base_speed: float = speed
         self.angular_speed: float = angular_speed
-        self.bounce_mode = bullet_data.motion.get("bounce_mode")
-        self.bounces_remaining = int(bullet_data.motion.get("bounce_count", 0))
+        self.motion = dict(bullet_data.motion)
+        self.motion.update(motion or {})
+        self.bounce_mode = self.motion.get("bounce_mode")
+        self.bounces_remaining = int(self.motion.get("bounce_count", 0))
+        acceleration = self.motion.get("acceleration")
+        self.acceleration = Vector2(*acceleration) if acceleration is not None else None
+        self.acceleration_delay = float(self.motion.get("acceleration_delay", 0.0))
+        self.initial_speed_boost = float(self.motion.get("initial_speed_boost", 0.0))
+        self.speed_boost_duration = float(self.motion.get("speed_boost_duration", 0.0))
+        self.acceleration_started = False
+        self.age = 0.0
+        self.linear_velocity = (Vector2.up() * self.speed).rotate(self.angle)
 
         self.current_sprite = 0
         self.change_sprite_timer = 0
         self.animation_speed = bullet_data.animation_speed
 
     def velocity(self) -> Vector2:
+        if self.acceleration is not None:
+            return self.linear_velocity
         return (Vector2.up() * self.speed).rotate(self.angle)
 
     def move(self, delta_time) -> bool:
+        if self.acceleration is not None:
+            if self.speed_boost_duration > 0.0 and self.age < self.speed_boost_duration:
+                remaining = 1.0 - self.age / self.speed_boost_duration
+                boosted_speed = self.base_speed + self.initial_speed_boost * remaining
+                self.linear_velocity = (Vector2.up() * boosted_speed).rotate(self.angle)
+            else:
+                if not self.acceleration_started:
+                    self.linear_velocity = (Vector2.up() * self.base_speed).rotate(self.angle)
+                    self.acceleration_started = True
+                if self.age >= self.acceleration_delay:
+                    self.linear_velocity += self.acceleration * delta_time
+                    velocity_length = self.linear_velocity.length()
+                    if velocity_length > 1e-8:
+                        self.speed = float(velocity_length)
+
         self.position += self.velocity() * delta_time
+        self.age += delta_time
 
         if self.bounces_remaining > 0:
             self._bounce_at_playfield_edge()
