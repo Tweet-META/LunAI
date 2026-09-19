@@ -37,6 +37,26 @@ class RewardObjectiveTests(unittest.TestCase):
         dangerous = compute_frame_reward(self.observation(1.0), 0, 0, collided=False, blocked_ratio=1.0)
         self.assertAlmostEqual(dangerous, safe)
 
+    def test_configured_pccm_penalty_reduces_reward(self):
+        reward = compute_frame_reward(
+            self.observation(0.4),
+            0,
+            0,
+            collided=False,
+            pccm_reward_weight=0.1,
+        )
+        self.assertAlmostEqual(reward, 0.06, places=6)
+
+    def test_configured_pccm_penalty_cannot_make_reward_negative(self):
+        reward = compute_frame_reward(
+            self.observation(1.0),
+            0,
+            0,
+            collided=False,
+            pccm_reward_weight=1.0,
+        )
+        self.assertEqual(reward, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

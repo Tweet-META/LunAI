@@ -1,14 +1,15 @@
 {
   "episodes": 1000000,
-  "max_steps": 1500,
+  "max_steps": 2160,
   "max_total_frame_steps": 1000000,
   "action_repeat": 1,
   "frame_stack": 4,
   "frame_stack_interval": 1,
   "num_envs": 8,
   "level_files": [
-    "level_6.json",
-    "level6_mirror.json"
+    "level_th06_stage3_spell1.json",
+    "level_th06_stage3_spell2.json",
+    "level_th06_stage3_spell3.json"
   ],
   "seed": 0,
   "rollout_steps": 1024,
@@ -16,6 +17,6 @@
   "learning_rate_final": 0.00004,
   "entropy_coef": 0.004,
   "entropy_coef_final": 0.0015,
-  "model_path": "checkpoints/lunai_v8.4.pt",
-  "log_path": "training_logs/lunai_v8.4.csv"
+  "model_path": "checkpoints/lunai_v9.0_pcc.pt",
+  "log_path": "training_logs/lunai_v9.0_pcc.csv"
 }

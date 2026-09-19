@@ -59,6 +59,7 @@ class TouhouRLEnv:
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
         pccm_observation_mode: str = "trajectory",
+        pccm_reward_weight: float = 0.0,
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -73,6 +74,8 @@ class TouhouRLEnv:
             raise ValueError("At least one non-empty level file is required.")
         if float(level_spawn_time_jitter) < 0.0:
             raise ValueError(f"level_spawn_time_jitter must be non-negative, got {level_spawn_time_jitter}.")
+        if float(pccm_reward_weight) < 0.0:
+            raise ValueError(f"pccm_reward_weight must be non-negative, got {pccm_reward_weight}.")
         self.level_file = level_file
         self.level_files = configured_levels
         self.level_spawn_time_jitter = float(level_spawn_time_jitter)
@@ -89,6 +92,7 @@ class TouhouRLEnv:
         self.pccm_upper_field_threshold = float(pccm_upper_field_threshold)
         self.pccm_upper_field_cost = float(pccm_upper_field_cost)
         self.pccm_observation_mode = str(pccm_observation_mode)
+        self.pccm_reward_weight = float(pccm_reward_weight)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
 
@@ -243,6 +247,7 @@ class TouhouRLEnv:
                 previous_action_for_reward,
                 collided,
                 blocked_ratio,
+                self.pccm_reward_weight,
             )
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp

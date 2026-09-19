@@ -88,11 +88,12 @@ def compute_frame_reward(
     previous_action: int,
     collided: bool,
     blocked_ratio: float = 0.0,
+    pccm_reward_weight: float = 0.0,
 ) -> float:
     if collided:
         return -COLLISION_PENALTY
 
-    # PCCM remains an observation and diagnostic metric, not a hidden reward signal.
     # Near a wall, remove at most the current frame's survival reward without going negative.
     wall_penalty = WALL_PROXIMITY_PENALTY_WEIGHT * min(1.0, wall_proximity(observation))
-    return max(0.0, SURVIVAL_REWARD - wall_penalty)
+    pccm_penalty = max(0.0, float(pccm_reward_weight)) * local_pccm_cost(observation)
+    return max(0.0, SURVIVAL_REWARD - wall_penalty - pccm_penalty)
