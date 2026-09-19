@@ -10,8 +10,8 @@ class PCCMObservationModeTests(unittest.TestCase):
     # Build one observation mode from the same moving bullet state.
     def build_observation(self, mode: str) -> dict[str, np.ndarray]:
         builder = ObservationBuilder(ObservationConfig(pccm_observation_mode=mode))
-        bullets = [BulletState(x=250.0, y=500.0, radius=8.0, vx=600.0, vy=0.0)]
-        player = PlayerState(x=300.0, y=500.0, radius=3.0)
+        bullets = [BulletState(x=142.0, y=360.0, radius=8.0, vx=600.0, vy=0.0)]
+        player = PlayerState(x=192.0, y=360.0, radius=3.0)
         return builder.build(bullets, player)
 
     # Check that occupancy-only keeps the PCCM channels present but zero.

@@ -55,6 +55,41 @@ class AttackFunctions:
         return bullets
 
     @staticmethod
+    def th06_aimed_circle(center: Vector2, number_of_bullets: int, number_of_layers: int,
+                          bullet_data: BulletData, speed1: float, speed2: float,
+                          player: Player, enemy: Enemy):
+        """Reproduce TH06 CIRCLE_AIMED, including its original layer speed interpolation."""
+        aimed_angle = AttackFunctions.aimed_angle(enemy.position, player.position)
+        return [
+            Bullet(
+                bullet_data,
+                center,
+                aimed_angle + bullet_index * 360 / number_of_bullets,
+                speed1 - (speed1 - speed2) * layer_index / number_of_layers,
+            )
+            for layer_index in range(number_of_layers)
+            for bullet_index in range(number_of_bullets)
+        ]
+
+    @staticmethod
+    def th06_aimed_fan(center: Vector2, number_of_bullets: int, number_of_layers: int,
+                       bullet_data: BulletData, speed1: float, speed2: float,
+                       angle_step: float, player: Player, enemy: Enemy):
+        """Reproduce TH06 FAN_AIMED with centered angles and layered speeds."""
+        aimed_angle = AttackFunctions.aimed_angle(enemy.position, player.position)
+        half = (number_of_bullets - 1) / 2
+        return [
+            Bullet(
+                bullet_data,
+                center,
+                aimed_angle + (bullet_index - half) * angle_step,
+                speed1 - (speed1 - speed2) * layer_index / number_of_layers,
+            )
+            for layer_index in range(number_of_layers)
+            for bullet_index in range(number_of_bullets)
+        ]
+
+    @staticmethod
     def random_cone(center: Vector2, number_of_bullets: int, bullet_data: BulletData, angle: float,
                     spread: float, speed: float, angular_speed: float = 0):
         # Create random bullets inside a limited angular cone.

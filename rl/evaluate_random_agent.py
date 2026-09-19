@@ -48,6 +48,7 @@ def append_log(path: Path, row: dict[str, object]) -> None:
 # Evaluate uniformly random actions in the current environment.
 def evaluate(args: argparse.Namespace) -> None:
     env = TouhouRLEnv(
+        render_mode="human" if args.render else None,
         max_steps=args.max_steps,
         action_repeat=args.action_repeat,
         level_file=args.level_file,
@@ -133,6 +134,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-start-margin", type=float, default=80.0)
     parser.add_argument("--seed", type=int, default=10000)
     parser.add_argument("--log-path", type=str, required=True)
+    parser.add_argument("--render", action="store_true")
     return parser
 
 

@@ -33,6 +33,8 @@ class Bullet:
         self.angle: float = angle
         self.speed: float = speed
         self.angular_speed: float = angular_speed
+        self.bounce_mode = bullet_data.motion.get("bounce_mode")
+        self.bounces_remaining = int(bullet_data.motion.get("bounce_count", 0))
 
         self.current_sprite = 0
         self.change_sprite_timer = 0
@@ -43,6 +45,9 @@ class Bullet:
 
     def move(self, delta_time) -> bool:
         self.position += self.velocity() * delta_time
+
+        if self.bounces_remaining > 0:
+            self._bounce_at_playfield_edge()
 
         self.collider.position = self.position + self.collider.offset.rotate(self.angle)
 
@@ -56,6 +61,29 @@ class Bullet:
             del self
             return False
         return True
+
+    def _bounce_at_playfield_edge(self) -> None:
+        """Apply TH06's 0x800 behavior: reflect at the sides and top, but exit at the bottom."""
+        sprite = self.get_sprite()
+        half_width = sprite.rect.w / 2
+        half_height = sprite.rect.h / 2
+        left, top, width, height = GAME_ZONE
+        bounced = False
+
+        if self.position.x() + half_width < left or self.position.x() - half_width > left + width:
+            self.angle = (-self.angle) % 360
+            bounced = True
+        if self.bounce_mode == "sides_top" and self.position.y() + half_height < top:
+            self.angle = (180 - self.angle) % 360
+            bounced = True
+        elif self.bounce_mode == "all_edges" and (
+                self.position.y() + half_height < top or
+                self.position.y() - half_height > top + height):
+            self.angle = (180 - self.angle) % 360
+            bounced = True
+
+        if bounced:
+            self.bounces_remaining -= 1
 
     def next_sprite(self) -> None:
         self.change_sprite_timer += 1

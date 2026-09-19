@@ -11,6 +11,8 @@ ATTACK_SPATIAL_FIELDS = {
     "long_random_cone": (6,),
     "wide_cone": (5,),
     "rectangle_wall": (4, 5, 7),
+    "th06_aimed_circle": (4, 5),
+    "th06_aimed_fan": (4, 5),
 }
 
 

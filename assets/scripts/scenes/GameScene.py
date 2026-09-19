@@ -164,6 +164,14 @@ class GameScene(Scene):
                 )
 
                 attack_data = []
+
+                def make_bullet_data(bul_data):
+                    return BulletData(
+                        SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
+                        Collider(bul_data[3], bul_data[4]),
+                        sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0,
+                        motion=bul_data[6] if len(bul_data) > 6 else None,
+                    )
                 for i in range(len(enemy.attack_data)):
                     if enemy.attack_data[i][0] == "wide_ring":
                         _, bul_num, ring_num, bul_data, spd, s_time, delay, a_speed, d_angle, rand_cnt = \
@@ -173,11 +181,7 @@ class GameScene(Scene):
                             (
                                 number_of_bullets=bul_num,
                                 number_of_rings=ring_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 speed=spd,
                                 start_time=s_time,
                                 delay=delay,
@@ -194,11 +198,7 @@ class GameScene(Scene):
                             (
                                 number_of_bullets=bul_num,
                                 number_of_randoms=rand_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 speed=spd,
                                 start_time=s_time,
                                 delay=delay,
@@ -213,11 +213,7 @@ class GameScene(Scene):
                             AttackFunctions.long_random_cone(
                                 number_of_bullets=bul_num,
                                 number_of_randoms=rand_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 angle=angle,
                                 spread=spread,
                                 speed=spd,
@@ -238,11 +234,7 @@ class GameScene(Scene):
                                     Vector2.zero(),
                                     columns,
                                     rows,
-                                    BulletData(
-                                        SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                        Collider(bul_data[3], bul_data[4]),
-                                        sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                    ),
+                                    make_bullet_data(bul_data),
                                     width,
                                     height,
                                     angle,
@@ -257,11 +249,7 @@ class GameScene(Scene):
                             AttackFunctions.wide_cone(
                                 number_of_bullets=bul_num,
                                 number_of_cones=cone_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 angle=angle,
                                 speed=spd,
                                 delta_angle=d_angle,
@@ -272,6 +260,32 @@ class GameScene(Scene):
                                 enemy=enemy
                             )
                         )
+                    elif enemy.attack_data[i][0] == "th06_aimed_circle":
+                        _, bul_num, layer_num, bul_data, speed1, speed2, start_time, volley_num, delay = \
+                            enemy.attack_data[i]
+                        bullet_data = make_bullet_data(bul_data)
+                        attack_data.extend([
+                            (
+                                AttackFunctions.th06_aimed_circle,
+                                round(start_time + delay * n, 3),
+                                [Vector2.zero(), bul_num, layer_num, bullet_data,
+                                 speed1, speed2, self.player, enemy],
+                            )
+                            for n in range(volley_num)
+                        ])
+                    elif enemy.attack_data[i][0] == "th06_aimed_fan":
+                        _, bul_num, layer_num, bul_data, speed1, speed2, angle_step, start_time, volley_num, delay = \
+                            enemy.attack_data[i]
+                        bullet_data = make_bullet_data(bul_data)
+                        attack_data.extend([
+                            (
+                                AttackFunctions.th06_aimed_fan,
+                                round(start_time + delay * n, 3),
+                                [Vector2.zero(), bul_num, layer_num, bullet_data,
+                                 speed1, speed2, angle_step, self.player, enemy],
+                            )
+                            for n in range(volley_num)
+                        ])
 
                 enemy.attack_data = sorted(attack_data, key=lambda x: x[1])
 
