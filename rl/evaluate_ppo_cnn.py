@@ -81,6 +81,7 @@ def evaluate(args: argparse.Namespace) -> None:
         pccm_upper_field_threshold=config.pccm_upper_field_threshold,
         pccm_upper_field_cost=config.pccm_upper_field_cost,
         pccm_observation_mode=config.pccm_observation_mode,
+        pccm_implementation=args.pccm_implementation,
         render_debug=args.render_debug,
     )
     first_observation = env.reset(seed=args.seed)
@@ -195,6 +196,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-start-margin", type=float, default=51.2)
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument(
+        "--pccm-implementation",
+        choices=("reference", "torch_cuda", "torch_cpu"),
+        default="reference",
+    )
     parser.add_argument("--log-path", type=str, default="")
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--print-actions", action="store_true")

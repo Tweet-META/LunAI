@@ -9,6 +9,7 @@ from assets.scripts.classes.game_logic.Enemy import Enemy
 from assets.scripts.classes.game_logic.Player import Player
 from assets.scripts.math_and_data.Vector2 import Vector2
 from playfield_config import scale_distance
+from rl.yellow_gap_diagnostic import FIELD_WIDTH, WALL_Y, wall_points
 
 
 class AttackFunctions:
@@ -257,6 +258,20 @@ class AttackFunctions:
             )
             for y_offset in y_offsets
             for x_offset in x_offsets
+        ]
+
+    @staticmethod
+    def yellow_gap_wall(center: Vector2, bullet_data: BulletData, gap_center: float, speed: float):
+        """Fire one row of bullets with one opening."""
+        field_center = FIELD_WIDTH / 2.0
+        return [
+            Bullet(
+                bullet_data,
+                center + Vector2(x - field_center, y),
+                180.0,
+                speed,
+            )
+            for x, y in wall_points(gap_center, WALL_Y)
         ]
 
     @staticmethod

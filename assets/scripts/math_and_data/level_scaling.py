@@ -11,6 +11,7 @@ ATTACK_SPATIAL_FIELDS = {
     "long_random_cone": (6,),
     "wide_cone": (5,),
     "rectangle_wall": (4, 5, 7),
+    "yellow_gap_sequence": (4,),
     "th06_aimed_circle": (4, 5),
     "th06_aimed_fan": (4, 5),
     "th06_stage3_spell1": (),
@@ -28,6 +29,9 @@ def scale_level(level: dict, target_size: tuple[int, int] = PLAYFIELD_SIZE) -> d
     if abs(sx - sy) > 1e-9:
         raise ValueError("Level scaling requires the same horizontal and vertical scale.")
     scale = sx
+
+    if "player_start_x_choices" in result:
+        result["player_start_x_choices"] = [x * scale for x in result["player_start_x_choices"]]
 
     for enemy in result["enemies"]:
         enemy["start_position"] = [value * scale for value in enemy["start_position"]]

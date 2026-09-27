@@ -2,6 +2,7 @@ import numpy as np
 import pygame
 from pygame.locals import *
 import json
+import random
 
 from assets.scripts.classes.game_logic.BulletData import BulletData
 from assets.scripts.classes.game_logic.Enemy import Enemy
@@ -11,6 +12,7 @@ from assets.scripts.classes.hud_and_rendering.Scene import Scene, render_fps
 from assets.scripts.classes.hud_and_rendering.SpriteSheet import SpriteSheet
 from assets.scripts.math_and_data.Vector2 import Vector2
 from assets.scripts.classes.game_logic.AttackFunctions import AttackFunctions
+from rl.yellow_gap_diagnostic import choose_gap_centers
 
 from assets.scripts.math_and_data.enviroment import *
 from assets.scripts.math_and_data.level_scaling import scale_level
@@ -61,8 +63,17 @@ class GameScene(Scene):
         self.time = 0
         with open(path_join("assets", "levels", self.level_file), encoding="utf-8") as level_stream:
             self.level = scale_level(json.load(level_stream), GAME_ZONE[2:4])
+        start_choices = self.level.get("player_start_x_choices", ())
+        if start_choices:
+            self.player.position = Vector2(
+                GAME_ZONE[0] + random.choice(start_choices),
+                self.player.position.y(),
+            )
+            self.player.collider.position = self.player.position
         self.level_enemies = sorted(self.level["enemies"], key=lambda enemy: enemy["time"])
         self.enemy_count = 0
+        self.diagnostic_gap_centers = ()
+        self.diagnostic_gap_interval_frames = 0
 
         self.enemies = []
 
@@ -242,6 +253,20 @@ class GameScene(Scene):
                                     a_speed,
                                 ],
                             )
+                        )
+                    elif enemy.attack_data[i][0] == "yellow_gap_sequence":
+                        _, wave_count, interval_frames, bul_data, speed, start_time = enemy.attack_data[i]
+                        bullet_data = make_bullet_data(bul_data)
+                        centers = choose_gap_centers(int(wave_count))
+                        self.diagnostic_gap_centers = centers
+                        self.diagnostic_gap_interval_frames = int(interval_frames)
+                        attack_data.extend(
+                            (
+                                AttackFunctions.yellow_gap_wall,
+                                round(start_time + wave * interval_frames / 60.0, 6),
+                                [Vector2.zero(), bullet_data, gap_center, speed],
+                            )
+                            for wave, gap_center in enumerate(centers)
                         )
                     elif enemy.attack_data[i][0] == "wide_cone":
                         _, bul_num, cone_num, bul_data, angle, spd, d_angle, s_time, delay, a_speed = enemy.attack_data[i]

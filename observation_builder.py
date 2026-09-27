@@ -498,6 +498,24 @@ def pccm_sample_components(
     upper_field_threshold: float = 0.70,
     upper_field_cost: float = 0.30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if implementation in {"torch_cpu", "torch_cuda"}:
+        from torch_pccm import pccm_sample_components_torch
+
+        return pccm_sample_components_torch(
+            bullets,
+            player_radius,
+            window,
+            sample_shape,
+            field_w,
+            field_h,
+            prediction_frames,
+            halo_width,
+            wall_margin,
+            fps,
+            upper_field_threshold,
+            upper_field_cost,
+            device="cuda" if implementation == "torch_cuda" else "cpu",
+        )
     if implementation == "auto":
         # Broadcasting wins on the tiny blue grid; ROI wins on 32x32 samples.
         implementation = "roi" if sample_shape[0] * sample_shape[1] >= 1024 else "reference"
@@ -652,7 +670,7 @@ class ObservationBuilder:
             raise ValueError("PCCM upper-field cost must be in [0, soft cap).")
         if not 0.0 < self.config.pccm_soft_cap < 1.0:
             raise ValueError("PCCM soft cap must be in (0, 1).")
-        if self.config.pccm_implementation not in {"auto", "reference", "roi"}:
+        if self.config.pccm_implementation not in {"auto", "reference", "roi", "torch_cpu", "torch_cuda"}:
             raise ValueError(f"Unknown PCCM implementation: {self.config.pccm_implementation}.")
         if self.config.pccm_observation_mode not in PCCM_OBSERVATION_MODES:
             raise ValueError(f"Unknown PCCM observation mode: {self.config.pccm_observation_mode}.")

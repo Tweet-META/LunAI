@@ -59,6 +59,7 @@ class TouhouRLEnv:
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
         pccm_observation_mode: str = "trajectory",
+        pccm_implementation: str = "reference",
         pccm_reward_weight: float = 0.0,
         render_debug: bool = False,
     ):
@@ -92,6 +93,7 @@ class TouhouRLEnv:
         self.pccm_upper_field_threshold = float(pccm_upper_field_threshold)
         self.pccm_upper_field_cost = float(pccm_upper_field_cost)
         self.pccm_observation_mode = str(pccm_observation_mode)
+        self.pccm_implementation = str(pccm_implementation)
         self.pccm_reward_weight = float(pccm_reward_weight)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
@@ -120,6 +122,7 @@ class TouhouRLEnv:
                 pccm_upper_field_threshold=self.pccm_upper_field_threshold,
                 pccm_upper_field_cost=self.pccm_upper_field_cost,
                 pccm_observation_mode=self.pccm_observation_mode,
+                pccm_implementation=self.pccm_implementation,
             )
         )
 

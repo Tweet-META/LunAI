@@ -156,6 +156,7 @@ def build_env_kwargs(args: argparse.Namespace, render_mode: str | None = None) -
         "pccm_upper_field_threshold": args.pccm_upper_field_threshold,
         "pccm_upper_field_cost": args.pccm_upper_field_cost,
         "pccm_observation_mode": args.pccm_observation_mode,
+        "pccm_implementation": args.pccm_implementation,
         "pccm_reward_weight": args.pccm_reward_weight,
     }
 
@@ -622,6 +623,7 @@ def train(args: argparse.Namespace) -> None:
         pccm_upper_field_threshold=args.pccm_upper_field_threshold,
         pccm_upper_field_cost=args.pccm_upper_field_cost,
         pccm_observation_mode=args.pccm_observation_mode,
+        pccm_implementation=args.pccm_implementation,
         pccm_reward_weight=args.pccm_reward_weight,
         render_debug=args.render_debug,
     )
@@ -710,6 +712,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pccm-upper-field-threshold", type=float, default=0.70)
     parser.add_argument("--pccm-upper-field-cost", type=float, default=0.30)
     parser.add_argument("--pccm-reward-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--pccm-implementation",
+        choices=("reference", "torch_cuda", "torch_cpu"),
+        default="reference",
+    )
     parser.add_argument(
         "--pccm-observation-mode",
         choices=("occupancy_only", "static", "trajectory"),
