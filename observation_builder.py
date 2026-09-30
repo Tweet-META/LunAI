@@ -54,7 +54,13 @@ def centered_window(center_x: float, center_y: float, width: int, height: int) -
 
 
 # Rasterize circular bullet hitboxes into a binary map.
-def make_occupancy_map(width: int, height: int, bullets: list[BulletState]) -> np.ndarray:
+def make_occupancy_map(
+    width: int, height: int, bullets: list[BulletState], *, implementation: str = "reference",
+) -> np.ndarray:
+    if implementation == "numba":
+        from numba_occupancy import make_occupancy_map_numba
+
+        return make_occupancy_map_numba(width, height, bullets)
     occupancy = np.zeros((height, width), dtype=np.float32)
     for bullet in bullets:
         r = max(1, int(np.ceil(bullet.radius)))
@@ -498,6 +504,14 @@ def pccm_sample_components(
     upper_field_threshold: float = 0.70,
     upper_field_cost: float = 0.30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if implementation == "numba":
+        from numba_pccm import pccm_sample_components_numba
+
+        return pccm_sample_components_numba(
+            bullets, player_radius, window, sample_shape, field_w, field_h,
+            prediction_frames, halo_width, wall_margin, fps,
+            upper_field_threshold, upper_field_cost,
+        )
     if implementation in {"torch_cpu", "torch_cuda"}:
         from torch_pccm import pccm_sample_components_torch
 
@@ -622,8 +636,14 @@ def red_occupancy_map(
     bullets: list[BulletState],
     window: tuple[int, int, int, int],
     map_shape: tuple[int, int],
+    *,
+    implementation: str = "reference",
 ) -> np.ndarray:
     # Build the local red-zone collision occupancy map.
+    if implementation == "numba":
+        from numba_occupancy import red_occupancy_map_numba
+
+        return red_occupancy_map_numba(bullets, window, map_shape)
     x1, y1, x2, y2 = window
     rows, cols = map_shape
     occupancy = np.zeros((rows, cols), dtype=np.float32)
@@ -670,7 +690,7 @@ class ObservationBuilder:
             raise ValueError("PCCM upper-field cost must be in [0, soft cap).")
         if not 0.0 < self.config.pccm_soft_cap < 1.0:
             raise ValueError("PCCM soft cap must be in (0, 1).")
-        if self.config.pccm_implementation not in {"auto", "reference", "roi", "torch_cpu", "torch_cuda"}:
+        if self.config.pccm_implementation not in {"auto", "reference", "roi", "torch_cpu", "torch_cuda", "numba"}:
             raise ValueError(f"Unknown PCCM implementation: {self.config.pccm_implementation}.")
         if self.config.pccm_observation_mode not in PCCM_OBSERVATION_MODES:
             raise ValueError(f"Unknown PCCM observation mode: {self.config.pccm_observation_mode}.")
@@ -692,7 +712,10 @@ class ObservationBuilder:
             )
             for bullet in bullets
         ]
-        occupancy = make_occupancy_map(cfg.playfield_width, cfg.playfield_height, collision_bullets)
+        occupancy = make_occupancy_map(
+            cfg.playfield_width, cfg.playfield_height, collision_bullets,
+            implementation=cfg.pccm_implementation,
+        )
         integral = make_integral_image(occupancy)
         yellow_valid = valid_area_grid(yellow_window, cfg.yellow_grid, cfg.playfield_width, cfg.playfield_height)
         red_valid = valid_area_grid(red_window, cfg.red_map, cfg.playfield_width, cfg.playfield_height)
@@ -732,6 +755,7 @@ class ObservationBuilder:
             collision_bullets,
             red_window,
             cfg.red_map,
+            implementation=cfg.pccm_implementation,
         )
         blue_components = projected_pccm(
             bullets,

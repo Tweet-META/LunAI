@@ -56,6 +56,51 @@ and use a new checkpoint and log path. This prototype still builds
 one observation per environment process and returns NumPy maps; a reported GPU
 kernel time alone does not establish a training speedup.
 
+## Optional Numba CPU PCCM
+
+The `numba` backend fuses distance, halo and probability-product operations into
+a single-threaded compiled loop, avoiding the large bullet/time/grid temporary
+arrays. It also compiles full-field and red-zone circular occupancy rasterization,
+preserving the original float64 geometry, clipping, rounding and pixel-center
+rules. Occupancy masks and density inputs must match exactly. PCCM uses float32
+without fast-math. Collision detection is unchanged and `reference` remains the
+default. Install only the optional dependency:
+
+```powershell
+python -m pip install -r requirements-numba.txt
+python -m unittest tests.test_numba_pccm tests.test_numba_occupancy -v
+python tools/benchmark_pccm_numba.py
+```
+
+The benchmark checks every sampled snapshot against the reference (maximum
+absolute PCCM error `3e-6`) and compares complete observation builds on all three
+stage-3 spells. It prints bullet counts and separates first-build compilation
+or cache loading from steady-state timings. For one level, pass
+`--level-file level_th06_stage3_spell2.json`; optionally save a report with
+`--json-path evaluation_logs/numba_benchmark.json`.
+Add `--compare-occupancy` to also measure `numba_pccm_only`, reproducing the
+earlier backend with reference occupancy. This isolates the extra speedup from
+compiled rasterization on the same snapshots and in alternating measurement order.
+
+After checking speed on the training machine, add `--pccm-implementation numba`
+to training or evaluation. PPO's `--device` remains independent. Each environment
+process uses one compiled CPU thread; first use can pause for compilation/cache
+loading. Observation timing does not establish the full PPO training speedup.
+
+To include game updates, rewards and four-frame CNN input preparation, and
+separately attribute CPU hot paths:
+
+```powershell
+python tools/profile_env_cpu.py
+```
+
+This writes `evaluation_logs/cpu_environment_profile.json`. Timing passes run
+without instrumentation; a separate pass measures components (entries marked
+`nested` are contained in other components and must not be added again). The
+workload uses a stationary invincible player and continues after collision
+signals to compare the same dense frames. This is a performance diagnostic,
+not survival evaluation. It excludes model inference, PPO updates and IPC.
+
 ## Yellow-gap diagnostic preview
 
 `level_yellow_gap_diagnostic.json` is a synthetic 30-second level with 30 seeded,

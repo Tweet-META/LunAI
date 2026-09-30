@@ -1,0 +1,2 @@
+# Optional CPU PCCM acceleration; the reference backend does not need Numba.
+numba>=0.61

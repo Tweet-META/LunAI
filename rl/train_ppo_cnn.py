@@ -714,7 +714,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pccm-reward-weight", type=float, default=0.0)
     parser.add_argument(
         "--pccm-implementation",
-        choices=("reference", "torch_cuda", "torch_cpu"),
+        choices=("reference", "torch_cuda", "torch_cpu", "numba"),
         default="reference",
     )
     parser.add_argument(

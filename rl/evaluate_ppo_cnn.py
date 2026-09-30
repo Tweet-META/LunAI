@@ -198,7 +198,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument(
         "--pccm-implementation",
-        choices=("reference", "torch_cuda", "torch_cpu"),
+        choices=("reference", "torch_cuda", "torch_cpu", "numba"),
         default="reference",
     )
     parser.add_argument("--log-path", type=str, default="")
