@@ -146,7 +146,11 @@ class GameScene(Scene):
         if self.level_enemies and self.enemy_count < len(self.level_enemies):
             if self.time >= self.level_enemies[self.enemy_count]["time"]:
                 enemy_data = self.level_enemies[self.enemy_count]
-                enemy = Enemy(
+                enemy_class = Enemy
+                if enemy_data.get("pattern") == "th06_scarlet_meister_hard":
+                    from assets.scripts.classes.game_logic.ScarletMeisterEnemy import ScarletMeisterEnemy
+                    enemy_class = ScarletMeisterEnemy
+                enemy = enemy_class(
                     position=Vector2(GAME_ZONE[0], GAME_ZONE[1]) + Vector2(*enemy_data["start_position"]),
                     trajectory=list(map(np.array, [enemy_data["start_position"]]+ enemy_data["trajectory"])),
                     speed=enemy_data["speed"],

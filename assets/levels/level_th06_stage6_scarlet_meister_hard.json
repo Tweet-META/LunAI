@@ -1,0 +1,32 @@
+{
+  "playfield_size": [384, 448],
+  "length": 30.0,
+  "name": "th06_stage6_hard_scarlet_meister",
+  "description": "Hard Scarlet Meister: aimed mixed-size volleys and alternating clockwise/counterclockwise sweeps, with random decelerating boss movement.",
+  "source": {
+    "archive": "th06_ST.DAT",
+    "ecl": "ecldata6.ecl",
+    "subroutine": 39,
+    "volley_subroutine": 37,
+    "spell_id": 49,
+    "spell_number": 50,
+    "spell_ordinal": 4,
+    "difficulty": "Hard",
+    "note": "Original attack parameters and activation delays, with Python-seeded randomness and a standardized isolated-spell boss start. Neutral simulator sprites and existing simulator collision rules are retained; native visual effects, shooting damage and spell scoring are not reproduced."
+  },
+  "enemies": [
+    {
+      "pattern": "th06_scarlet_meister_hard",
+      "start_position": [192, 64],
+      "trajectory": [[192, 64], [192, 64], [192, 64]],
+      "speed": 1.0,
+      "sprite": {"size": [24, 19], "path": ["assets", "sprites", "entities", "fairy_0.png"]},
+      "collider": {"radius": 10, "offset": [0, 0]},
+      "hp": 99999,
+      "attacks": [],
+      "drop": {"list": ["nothing"], "probabilities": [100]},
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}
