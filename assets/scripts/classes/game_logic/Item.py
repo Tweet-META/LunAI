@@ -5,14 +5,20 @@ from assets.scripts.classes.game_logic.Collider import Collider
 from assets.scripts.classes.game_logic.Player import Player
 from assets.scripts.math_and_data.Vector2 import Vector2
 from assets.scripts.math_and_data.enviroment import GAME_ZONE, music_module
+from playfield_config import WORLD_SCALE, scale_distance
 
 
 class Item:
     def __init__(self, position: Vector2, sprite: pygame.Surface, collider: Collider, on_collect: callable, homing: bool = False):
         self.position = position
         self.start_position = position
-        self.sprite: pygame.Surface = sprite
+        self.sprite: pygame.Surface = pygame.transform.scale(
+            sprite,
+            (max(1, round(sprite.get_width() * WORLD_SCALE)),
+             max(1, round(sprite.get_height() * WORLD_SCALE))),
+        )
         self.collider: Collider = collider
+        self.collider.radius = scale_distance(self.collider.radius)
         self.on_collect: callable = on_collect
 
         self.homing = homing
@@ -22,13 +28,13 @@ class Item:
     def move(self, delta_time, player: Player) -> bool:
         if not self.homing:
             self.t += 10 * delta_time
-            self.position = Vector2(self.start_position.x(), self.start_position.y() + (self.t ** 2 - 100))
+            self.position = Vector2(self.start_position.x(), self.start_position.y() + scale_distance(self.t ** 2 - 100))
         else:
             self.t += 60 * delta_time
             if self.t > 1.5:
                 player_pos = player.position
                 direction = player_pos - self.position
-                self.position += direction.normalize() * 500 * delta_time
+                self.position += direction.normalize() * scale_distance(500) * delta_time
 
         self.collider.position = self.position
         if self.position.y() > GAME_ZONE[1] + GAME_ZONE[3]:

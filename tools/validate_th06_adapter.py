@@ -38,16 +38,27 @@ class SampleBackend:
     def __init__(self) -> None:
         self.snapshot = make_sample_snapshot()
         self.closed = False
+        self.steps = 0
 
     # Reset the sample timeline.
-    def reset(self, stage: int, difficulty: int, seed: int) -> Th06Snapshot:
+    def reset(self, stage: int, difficulty: int, seed: int, spell_ordinal: int = 0) -> Th06Snapshot:
         del seed
-        self.snapshot = replace(make_sample_snapshot(), stage=stage, difficulty=difficulty)
+        self.steps = 0
+        self.snapshot = replace(
+            make_sample_snapshot(),
+            stage=stage,
+            difficulty=difficulty,
+            spell_active=spell_ordinal > 0,
+            spell_id=42 if spell_ordinal > 0 else 0,
+            spell_ordinal=spell_ordinal,
+            requested_spell_ordinal=spell_ordinal,
+        )
         return self.snapshot
 
     # Advance one sample frame and preserve movement diagnostics.
     def step(self, action: int, focus: bool, shoot: bool) -> Th06Snapshot:
         del focus, shoot
+        self.steps += 1
         requested_dx = 1.0 if action in (4, 6, 8) else 0.0
         player = replace(
             self.snapshot.player,
@@ -55,7 +66,12 @@ class SampleBackend:
             requested_dx=requested_dx,
             actual_dx=requested_dx,
         )
-        self.snapshot = replace(self.snapshot, game_frame=self.snapshot.game_frame + 1, player=player)
+        self.snapshot = replace(
+            self.snapshot,
+            game_frame=self.snapshot.game_frame + 1,
+            player=player,
+            spell_active=self.snapshot.spell_active and self.steps < 2,
+        )
         return self.snapshot
 
     # Mark the sample backend as closed.
@@ -143,9 +159,17 @@ def make_sample_snapshot_bytes() -> bytes:
 def validate_process_protocol() -> None:
     if TH06_RL_REQUEST.size != 36 or TH06_RL_RESPONSE.size != 16:
         raise AssertionError("The Python process protocol layout does not match the C++ server.")
-    request = TH06_RL_REQUEST.pack(TH06_RL_PROTOCOL_MAGIC, TH06_RL_PROTOCOL_VERSION, 1, 1, 2, 3, 0, 0.0, 0.0)
-    magic, version, operation, stage, difficulty, seed, _, _, _ = TH06_RL_REQUEST.unpack(request)
-    if (magic, version, operation, stage, difficulty, seed) != (TH06_RL_PROTOCOL_MAGIC, 1, 1, 1, 2, 3):
+    request = TH06_RL_REQUEST.pack(TH06_RL_PROTOCOL_MAGIC, TH06_RL_PROTOCOL_VERSION, 1, 1, 2, 3, 4, 0.0, 0.0)
+    magic, version, operation, stage, difficulty, seed, spell, _, _ = TH06_RL_REQUEST.unpack(request)
+    if (magic, version, operation, stage, difficulty, seed, spell) != (
+        TH06_RL_PROTOCOL_MAGIC,
+        1,
+        1,
+        1,
+        2,
+        3,
+        4,
+    ):
         raise AssertionError("The native process request was not encoded correctly.")
     snapshot = make_sample_snapshot_bytes()
     if len(snapshot) != th06_snapshot_byte_size():
@@ -193,6 +217,22 @@ def validate_environment() -> None:
     env.close()
     if not backend.closed:
         raise AssertionError("The TH06 environment did not close its backend.")
+
+
+# Validate stage-local spell reset and episode termination behavior.
+def validate_spell_environment() -> None:
+    backend = SampleBackend()
+    env = Th06RLEnv(backend=backend, spell=2, max_steps=10)
+    env.reset(seed=9)
+    if env.snapshot is None or env.snapshot.spell_ordinal != 2 or not env.snapshot.spell_active:
+        raise AssertionError("The TH06 environment did not start at the requested spell.")
+    _, _, done, info = env.step(0)
+    if done or info["spell_finished"]:
+        raise AssertionError("The spell episode ended while its target spell was still active.")
+    _, _, done, info = env.step(0)
+    if not done or not info["spell_finished"]:
+        raise AssertionError("The spell episode did not end with its target spell.")
+    env.close()
 
 
 # Validate masks and margins at the native movement boundaries.
@@ -264,6 +304,7 @@ def main() -> None:
         raise AssertionError("The sample hazards did not produce red PCCM cost.")
     validate_playable_bounds()
     validate_environment()
+    validate_spell_environment()
     validate_process_protocol()
     print(f"TH06 snapshot ABI bytes: {th06_snapshot_byte_size()}")
     print("TH06 observation adapter validation passed.")

@@ -1,0 +1,236 @@
+{
+  "playfield_size": [
+    384,
+    448
+  ],
+  "length": 36.0,
+  "name": "th06_stage3_normal_spell2",
+  "description": "Alternating petals formed by random initial velocities and fixed directional acceleration.",
+  "source": {
+    "archive": "th06_ST.DAT",
+    "ecl": "ecldata3.ecl",
+    "subroutine": 31,
+    "spell_id": 11,
+    "spell_ordinal": 2,
+    "difficulty": "Normal",
+    "note": "Reconstructed from the original ECL parameters and checked against native headless snapshots. Colors and spawn effects share the simulator's neutral bullet sprite; collision-relevant timing, counts, speed, acceleration, and boss motion are retained."
+  },
+  "enemies": [
+    {
+      "start_position": [
+        192,
+        64
+      ],
+      "trajectory": [
+        [
+          192,
+          64
+        ],
+        [
+          192,
+          64
+        ],
+        [
+          178,
+          91
+        ],
+        [
+          136,
+          144
+        ],
+        [
+          136,
+          144
+        ],
+        [
+          136,
+          144
+        ],
+        [
+          107,
+          140
+        ],
+        [
+          32,
+          129
+        ],
+        [
+          32,
+          129
+        ],
+        [
+          32,
+          129
+        ],
+        [
+          62,
+          126
+        ],
+        [
+          128,
+          110
+        ],
+        [
+          224,
+          82
+        ],
+        [
+          300,
+          112
+        ],
+        [
+          300,
+          112
+        ],
+        [
+          300,
+          112
+        ],
+        [
+          268,
+          130
+        ],
+        [
+          196,
+          145
+        ],
+        [
+          118,
+          120
+        ],
+        [
+          64,
+          92
+        ],
+        [
+          192,
+          64
+        ],
+        [
+          192,
+          64
+        ],
+        [
+          178,
+          91
+        ],
+        [
+          136,
+          144
+        ],
+        [
+          136,
+          144
+        ],
+        [
+          136,
+          144
+        ],
+        [
+          107,
+          140
+        ],
+        [
+          32,
+          129
+        ],
+        [
+          32,
+          129
+        ],
+        [
+          32,
+          129
+        ],
+        [
+          62,
+          126
+        ],
+        [
+          128,
+          110
+        ],
+        [
+          224,
+          82
+        ],
+        [
+          300,
+          112
+        ],
+        [
+          300,
+          112
+        ],
+        [
+          300,
+          112
+        ],
+        [
+          268,
+          130
+        ],
+        [
+          196,
+          145
+        ]
+      ],
+      "speed": 1.0,
+      "sprite": {
+        "size": [
+          24,
+          19
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "fairy_0.png"
+        ]
+      },
+      "collider": {
+        "radius": 10,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 99999,
+      "attacks": [
+        [
+          "th06_stage3_spell2",
+          0,
+          0,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "bullet_0.png"
+            ],
+            16,
+            16,
+            3,
+            [
+              0,
+              0
+            ],
+            1.0
+          ],
+          2.0,
+          34.0
+        ]
+      ],
+      "drop": {
+        "list": [
+          "nothing"
+        ],
+        "probabilities": [
+          100
+        ]
+      },
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

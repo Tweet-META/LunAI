@@ -3,12 +3,15 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-/tests/
+.venv/
+venv/
 
 checkpoints/
 training_logs/*
 failed_runs/
 diagnostics/
+evaluation_logs/
+/eval/
 plots/
 !training_logs/plots/
 training_logs/plots/*

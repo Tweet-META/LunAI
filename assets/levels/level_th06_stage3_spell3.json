@@ -1,0 +1,236 @@
+{
+  "playfield_size": [
+    384,
+    448
+  ],
+  "length": 36.0,
+  "name": "th06_stage3_normal_spell3",
+  "description": "Dense counter-rotating acceleration arms with the original six-frame emission rhythm.",
+  "source": {
+    "archive": "th06_ST.DAT",
+    "ecl": "ecldata3.ecl",
+    "subroutine": 33,
+    "spell_id": 13,
+    "spell_ordinal": 3,
+    "difficulty": "Normal",
+    "note": "Reconstructed from the original ECL parameters and checked against native headless snapshots. Colors and spawn effects share the simulator's neutral bullet sprite; collision-relevant timing, counts, speed, acceleration, and boss motion are retained."
+  },
+  "enemies": [
+    {
+      "start_position": [
+        192,
+        128
+      ],
+      "trajectory": [
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ],
+        [
+          192,
+          128
+        ]
+      ],
+      "speed": 1.0,
+      "sprite": {
+        "size": [
+          24,
+          19
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "fairy_0.png"
+        ]
+      },
+      "collider": {
+        "radius": 10,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 99999,
+      "attacks": [
+        [
+          "th06_stage3_spell3",
+          0,
+          0,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "bullet_0.png"
+            ],
+            16,
+            16,
+            3,
+            [
+              0,
+              0
+            ],
+            1.0
+          ],
+          2.0,
+          34.0
+        ]
+      ],
+      "drop": {
+        "list": [
+          "nothing"
+        ],
+        "probabilities": [
+          100
+        ]
+      },
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

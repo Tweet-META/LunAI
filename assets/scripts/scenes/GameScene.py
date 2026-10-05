@@ -2,6 +2,7 @@ import numpy as np
 import pygame
 from pygame.locals import *
 import json
+import random
 
 from assets.scripts.classes.game_logic.BulletData import BulletData
 from assets.scripts.classes.game_logic.Enemy import Enemy
@@ -11,8 +12,10 @@ from assets.scripts.classes.hud_and_rendering.Scene import Scene, render_fps
 from assets.scripts.classes.hud_and_rendering.SpriteSheet import SpriteSheet
 from assets.scripts.math_and_data.Vector2 import Vector2
 from assets.scripts.classes.game_logic.AttackFunctions import AttackFunctions
+from rl.yellow_gap_diagnostic import choose_gap_centers
 
 from assets.scripts.math_and_data.enviroment import *
+from assets.scripts.math_and_data.level_scaling import scale_level
 
 from PIL import Image
 
@@ -58,9 +61,19 @@ class GameScene(Scene):
         self.effect_group = pygame.sprite.RenderPlain()
 
         self.time = 0
-        self.level = json.load(open(path_join("assets", "levels", self.level_file), encoding="utf-8"))
+        with open(path_join("assets", "levels", self.level_file), encoding="utf-8") as level_stream:
+            self.level = scale_level(json.load(level_stream), GAME_ZONE[2:4])
+        start_choices = self.level.get("player_start_x_choices", ())
+        if start_choices:
+            self.player.position = Vector2(
+                GAME_ZONE[0] + random.choice(start_choices),
+                self.player.position.y(),
+            )
+            self.player.collider.position = self.player.position
         self.level_enemies = sorted(self.level["enemies"], key=lambda enemy: enemy["time"])
         self.enemy_count = 0
+        self.diagnostic_gap_centers = ()
+        self.diagnostic_gap_interval_frames = 0
 
         self.enemies = []
 
@@ -133,7 +146,11 @@ class GameScene(Scene):
         if self.level_enemies and self.enemy_count < len(self.level_enemies):
             if self.time >= self.level_enemies[self.enemy_count]["time"]:
                 enemy_data = self.level_enemies[self.enemy_count]
-                enemy = Enemy(
+                enemy_class = Enemy
+                if enemy_data.get("pattern") == "th06_scarlet_meister_hard":
+                    from assets.scripts.classes.game_logic.ScarletMeisterEnemy import ScarletMeisterEnemy
+                    enemy_class = ScarletMeisterEnemy
+                enemy = enemy_class(
                     position=Vector2(GAME_ZONE[0], GAME_ZONE[1]) + Vector2(*enemy_data["start_position"]),
                     trajectory=list(map(np.array, [enemy_data["start_position"]]+ enemy_data["trajectory"])),
                     speed=enemy_data["speed"],
@@ -162,6 +179,14 @@ class GameScene(Scene):
                 )
 
                 attack_data = []
+
+                def make_bullet_data(bul_data):
+                    return BulletData(
+                        SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
+                        Collider(bul_data[3], bul_data[4]),
+                        sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0,
+                        motion=bul_data[6] if len(bul_data) > 6 else None,
+                    )
                 for i in range(len(enemy.attack_data)):
                     if enemy.attack_data[i][0] == "wide_ring":
                         _, bul_num, ring_num, bul_data, spd, s_time, delay, a_speed, d_angle, rand_cnt = \
@@ -171,11 +196,7 @@ class GameScene(Scene):
                             (
                                 number_of_bullets=bul_num,
                                 number_of_rings=ring_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 speed=spd,
                                 start_time=s_time,
                                 delay=delay,
@@ -192,11 +213,7 @@ class GameScene(Scene):
                             (
                                 number_of_bullets=bul_num,
                                 number_of_randoms=rand_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 speed=spd,
                                 start_time=s_time,
                                 delay=delay,
@@ -211,11 +228,7 @@ class GameScene(Scene):
                             AttackFunctions.long_random_cone(
                                 number_of_bullets=bul_num,
                                 number_of_randoms=rand_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 angle=angle,
                                 spread=spread,
                                 speed=spd,
@@ -236,11 +249,7 @@ class GameScene(Scene):
                                     Vector2.zero(),
                                     columns,
                                     rows,
-                                    BulletData(
-                                        SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                        Collider(bul_data[3], bul_data[4]),
-                                        sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                    ),
+                                    make_bullet_data(bul_data),
                                     width,
                                     height,
                                     angle,
@@ -249,17 +258,27 @@ class GameScene(Scene):
                                 ],
                             )
                         )
+                    elif enemy.attack_data[i][0] == "yellow_gap_sequence":
+                        _, wave_count, interval_frames, bul_data, speed, start_time = enemy.attack_data[i]
+                        bullet_data = make_bullet_data(bul_data)
+                        centers = choose_gap_centers(int(wave_count))
+                        self.diagnostic_gap_centers = centers
+                        self.diagnostic_gap_interval_frames = int(interval_frames)
+                        attack_data.extend(
+                            (
+                                AttackFunctions.yellow_gap_wall,
+                                round(start_time + wave * interval_frames / 60.0, 6),
+                                [Vector2.zero(), bullet_data, gap_center, speed],
+                            )
+                            for wave, gap_center in enumerate(centers)
+                        )
                     elif enemy.attack_data[i][0] == "wide_cone":
                         _, bul_num, cone_num, bul_data, angle, spd, d_angle, s_time, delay, a_speed = enemy.attack_data[i]
                         attack_data.extend(
                             AttackFunctions.wide_cone(
                                 number_of_bullets=bul_num,
                                 number_of_cones=cone_num,
-                                bullet_data=BulletData(
-                                    SpriteSheet(bul_data[0]).crop((bul_data[1], bul_data[2])),
-                                    Collider(bul_data[3], bul_data[4]),
-                                    sprite_scale=bul_data[5] if len(bul_data) > 5 else 1.0
-                                ),
+                                bullet_data=make_bullet_data(bul_data),
                                 angle=angle,
                                 speed=spd,
                                 delta_angle=d_angle,
@@ -268,6 +287,53 @@ class GameScene(Scene):
                                 angular_speed=a_speed,
                                 player=self.player,
                                 enemy=enemy
+                            )
+                        )
+                    elif enemy.attack_data[i][0] == "th06_aimed_circle":
+                        _, bul_num, layer_num, bul_data, speed1, speed2, start_time, volley_num, delay = \
+                            enemy.attack_data[i]
+                        bullet_data = make_bullet_data(bul_data)
+                        attack_data.extend([
+                            (
+                                AttackFunctions.th06_aimed_circle,
+                                round(start_time + delay * n, 3),
+                                [Vector2.zero(), bul_num, layer_num, bullet_data,
+                                 speed1, speed2, self.player, enemy],
+                            )
+                            for n in range(volley_num)
+                        ])
+                    elif enemy.attack_data[i][0] == "th06_aimed_fan":
+                        _, bul_num, layer_num, bul_data, speed1, speed2, angle_step, start_time, volley_num, delay = \
+                            enemy.attack_data[i]
+                        bullet_data = make_bullet_data(bul_data)
+                        attack_data.extend([
+                            (
+                                AttackFunctions.th06_aimed_fan,
+                                round(start_time + delay * n, 3),
+                                [Vector2.zero(), bul_num, layer_num, bullet_data,
+                                 speed1, speed2, angle_step, self.player, enemy],
+                            )
+                            for n in range(volley_num)
+                        ])
+                    elif enemy.attack_data[i][0] == "th06_stage3_spell1":
+                        _, _, _, bul_data, start_time, duration = enemy.attack_data[i]
+                        attack_data.extend(
+                            AttackFunctions.th06_stage3_spell1(
+                                make_bullet_data(bul_data), start_time, duration
+                            )
+                        )
+                    elif enemy.attack_data[i][0] == "th06_stage3_spell2":
+                        _, _, _, bul_data, start_time, duration = enemy.attack_data[i]
+                        attack_data.extend(
+                            AttackFunctions.th06_stage3_spell2(
+                                make_bullet_data(bul_data), start_time, duration
+                            )
+                        )
+                    elif enemy.attack_data[i][0] == "th06_stage3_spell3":
+                        _, _, _, bul_data, start_time, duration = enemy.attack_data[i]
+                        attack_data.extend(
+                            AttackFunctions.th06_stage3_spell3(
+                                make_bullet_data(bul_data), start_time, duration
                             )
                         )
 

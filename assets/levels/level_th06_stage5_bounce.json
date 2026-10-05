@@ -1,0 +1,69 @@
+{
+  "playfield_size": [384, 448],
+  "length": 18.0,
+  "name": "th06_stage5_hard_bounce_excerpt",
+  "description": "TH06 Stage 5 ECL subroutine 19, Hard branch: aimed bouncing kunai rings followed by fast aimed dagger fans.",
+  "source": {
+    "archive": "th06_ST.DAT",
+    "ecl": "ecldata5.ecl",
+    "subroutine": 19,
+    "difficulty": "Hard",
+    "ring_flags": "0x804",
+    "note": "Speeds are converted from TH06 pixels per frame to pixels per second at 60 FPS. Enemy choreography is held stationary, and repeated volleys are reduced to keep RL rendering and training responsive."
+  },
+  "enemies": [
+    {
+      "start_position": [192, 72],
+      "trajectory": [
+        [192, 72], [192, 72], [192, 72], [192, 72], [192, 72],
+        [192, 72], [192, 72], [192, 72], [192, 72], [192, 72],
+        [192, 72], [192, 72], [192, 72], [192, 72], [192, 72],
+        [192, 72], [192, 72], [192, 72], [192, 72], [192, 72],
+        [192, 72], [192, 72], [192, 72], [192, 72]
+      ],
+      "speed": 1.0,
+      "sprite": {
+        "size": [24, 19],
+        "path": ["assets", "sprites", "entities", "fairy_0.png"]
+      },
+      "collider": {"radius": 10, "offset": [0, 0]},
+      "hp": 9999,
+      "attacks": [
+        ["th06_aimed_circle", 15, 2,
+          [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 3, [0, 0], 1.0,
+           {"bounce_mode": "sides_top", "bounce_count": 1}],
+          90, 48, 0.583, 4, 0.1],
+        ["th06_aimed_fan", 11, 4,
+          [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 4, [0, 0], 1.0],
+          330, 72, 18, 1.833, 2, 0.3],
+
+        ["th06_aimed_circle", 15, 2,
+          [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 3, [0, 0], 1.0,
+           {"bounce_mode": "sides_top", "bounce_count": 1}],
+          90, 48, 4.716, 4, 0.1],
+        ["th06_aimed_fan", 11, 4,
+          [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 4, [0, 0], 1.0],
+          330, 72, 18, 5.966, 2, 0.3],
+
+        ["th06_aimed_circle", 15, 2,
+          [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 3, [0, 0], 1.0,
+           {"bounce_mode": "sides_top", "bounce_count": 1}],
+          90, 48, 8.849, 4, 0.1],
+        ["th06_aimed_fan", 11, 4,
+          [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 4, [0, 0], 1.0],
+          330, 72, 18, 10.099, 2, 0.3],
+
+        ["th06_aimed_circle", 15, 2,
+          [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 3, [0, 0], 1.0,
+           {"bounce_mode": "sides_top", "bounce_count": 1}],
+          90, 48, 12.982, 4, 0.1],
+        ["th06_aimed_fan", 11, 4,
+          [["assets", "sprites", "projectiles_and_items", "ellipse_bullet_0.png"], 24, 24, 4, [0, 0], 1.0],
+          330, 72, 18, 14.232, 2, 0.3]
+      ],
+      "drop": {"list": ["nothing"], "probabilities": [100]},
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

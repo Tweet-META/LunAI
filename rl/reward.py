@@ -4,10 +4,9 @@ import numpy as np
 
 
 SURVIVAL_REWARD = 0.1
-COLLISION_PENALTY = 30.0
+COLLISION_PENALTY = 0.0
 ACTION_CHANGE_PENALTY = 0.0
-PCCM_STATE_PENALTY_WEIGHT = 0.1
-BLOCKED_MOVEMENT_PENALTY_WEIGHT = 0.05
+WALL_PROXIMITY_PENALTY_WEIGHT = 0.1
 WALL_PROXIMITY_MARGIN = 0.12
 
 
@@ -59,13 +58,10 @@ def local_pccm_cost(observation: dict[str, np.ndarray]) -> float:
 def wall_proximity(observation: dict[str, np.ndarray], margin: float = WALL_PROXIMITY_MARGIN) -> float:
     if not 0.0 < margin <= 0.5:
         raise ValueError(f"Wall margin must be in (0, 0.5], got {margin}.")
-    features = observation["player_features"]
-    left_margin = float(np.clip(features[4], 0.0, 1.0))
-    right_margin = float(np.clip(features[5], 0.0, 1.0))
-    top_margin = float(np.clip(features[6], 0.0, 1.0))
-    bottom_margin = float(np.clip(features[7], 0.0, 1.0))
-    horizontal = max(0.0, 1.0 - min(left_margin, right_margin) / margin)
-    vertical = max(0.0, 1.0 - min(top_margin, bottom_margin) / margin)
+    player_x = float(np.clip(observation["player_features"][0], 0.0, 1.0))
+    player_y = float(np.clip(observation["player_features"][1], 0.0, 1.0))
+    horizontal = max(0.0, 1.0 - min(player_x, 1.0 - player_x) / margin)
+    vertical = max(0.0, 1.0 - min(player_y, 1.0 - player_y) / margin)
     return horizontal + vertical
 
 
@@ -92,17 +88,12 @@ def compute_frame_reward(
     previous_action: int,
     collided: bool,
     blocked_ratio: float = 0.0,
+    pccm_reward_weight: float = 0.0,
 ) -> float:
     if collided:
         return -COLLISION_PENALTY
 
-    pccm_penalty = PCCM_STATE_PENALTY_WEIGHT * local_pccm_cost(observation)
-    blocked_penalty = BLOCKED_MOVEMENT_PENALTY_WEIGHT * float(np.clip(blocked_ratio, 0.0, 1.0))
-    # action_change_penalty = ACTION_CHANGE_PENALTY if action != previous_action else 0.0
-
-    return (
-        SURVIVAL_REWARD
-        - pccm_penalty 
-        - blocked_penalty 
-        # - action_change_penalty
-    )
+    # Near a wall, remove at most the current frame's survival reward without going negative.
+    wall_penalty = WALL_PROXIMITY_PENALTY_WEIGHT * min(1.0, wall_proximity(observation))
+    pccm_penalty = max(0.0, float(pccm_reward_weight)) * local_pccm_cost(observation)
+    return max(0.0, SURVIVAL_REWARD - wall_penalty - pccm_penalty)

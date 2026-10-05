@@ -16,7 +16,7 @@ from rl.reward import blocked_movement_ratio, compute_frame_reward, local_pccm_c
 
 
 TH06_RL_MAGIC = 0x4C523654
-TH06_RL_ABI_VERSION = 1
+TH06_RL_ABI_VERSION = 2
 TH06_FPS = 60.0
 TH06_PLAYFIELD_WIDTH = 384
 TH06_PLAYFIELD_HEIGHT = 448
@@ -104,6 +104,10 @@ class Th06Snapshot:
     player: Th06PlayerSnapshot
     supervisor_state: int = 2
     game_completed: bool = False
+    spell_active: bool = False
+    spell_id: int = 0
+    spell_ordinal: int = 0
+    requested_spell_ordinal: int = 0
     bullets: tuple[Th06BulletSnapshot, ...] = ()
     lasers: tuple[Th06LaserSnapshot, ...] = ()
     enemies: tuple[Th06EnemySnapshot, ...] = ()
@@ -111,7 +115,7 @@ class Th06Snapshot:
 
 class Th06Backend(Protocol):
     # Reset one original TH06 stage and return its first state.
-    def reset(self, stage: int, difficulty: int, seed: int) -> Th06Snapshot: ...
+    def reset(self, stage: int, difficulty: int, seed: int, spell_ordinal: int = 0) -> Th06Snapshot: ...
 
     # Advance exactly one original TH06 game frame.
     def step(self, action: int, focus: bool, shoot: bool) -> Th06Snapshot: ...
@@ -204,6 +208,10 @@ class Th06ProcessBackend:
         if magic != TH06_RL_PROTOCOL_MAGIC or version != TH06_RL_PROTOCOL_VERSION:
             raise RuntimeError("TH06 RL server returned an incompatible protocol header.")
         if status != 0:
+            if operation == TH06_RL_SERVER_RESET and status == 3:
+                raise RuntimeError(
+                    "TH06 could not reach the requested stage-local spell before the stage ended."
+                )
             raise RuntimeError(f"TH06 RL server command {operation} failed with status {status}.")
         if not expect_snapshot:
             if snapshot_size != 0:
@@ -215,11 +223,11 @@ class Th06ProcessBackend:
         return snapshot_from_bytes(self._read_exact(self.process.stdout, snapshot_size))
 
     # Reset one original TH06 stage in the native process.
-    def reset(self, stage: int, difficulty: int, seed: int) -> Th06Snapshot:
+    def reset(self, stage: int, difficulty: int, seed: int, spell_ordinal: int = 0) -> Th06Snapshot:
         if self.has_reset:
             self._restart_process()
         signed_seed = ctypes.c_int32(int(seed)).value
-        snapshot = self._request(TH06_RL_SERVER_RESET, stage, difficulty, signed_seed)
+        snapshot = self._request(TH06_RL_SERVER_RESET, stage, difficulty, signed_seed, spell_ordinal)
         if snapshot is None:
             raise RuntimeError("TH06 RL reset returned no snapshot.")
         self.has_reset = True
@@ -333,6 +341,10 @@ class _CSnapshot(ctypes.Structure):
         ("enemy_count", ctypes.c_uint32),
         ("supervisor_state", ctypes.c_uint32),
         ("game_completed", ctypes.c_uint32),
+        ("spell_active", ctypes.c_uint32),
+        ("spell_id", ctypes.c_uint32),
+        ("spell_ordinal", ctypes.c_uint32),
+        ("requested_spell_ordinal", ctypes.c_uint32),
         ("player", _CPlayerSnapshot),
         ("bullets", _CBulletSnapshot * TH06_MAX_BULLETS),
         ("lasers", _CLaserSnapshot * TH06_MAX_LASERS),
@@ -438,6 +450,10 @@ def _snapshot_from_c(snapshot: _CSnapshot) -> Th06Snapshot:
         enemies=enemies,
         supervisor_state=int(snapshot.supervisor_state),
         game_completed=bool(snapshot.game_completed),
+        spell_active=bool(snapshot.spell_active),
+        spell_id=int(snapshot.spell_id),
+        spell_ordinal=int(snapshot.spell_ordinal),
+        requested_spell_ordinal=int(snapshot.requested_spell_ordinal),
     )
 
 
@@ -567,6 +583,7 @@ class Th06RLEnv:
         backend: Th06Backend,
         stage: int = 1,
         difficulty: int = 1,
+        spell: int = 0,
         max_steps: int | None = None,
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
@@ -581,9 +598,12 @@ class Th06RLEnv:
             raise ValueError("frame_stack must be in 1..5.")
         if not 1 <= frame_stack_interval <= 5:
             raise ValueError("frame_stack_interval must be in 1..5.")
+        if spell < 0:
+            raise ValueError("spell must be zero or a positive stage-local ordinal.")
         self.backend = backend
         self.stage = int(stage)
         self.difficulty = int(difficulty)
+        self.spell = int(spell)
         self.max_steps = max_steps
         self.frame_stack = int(frame_stack)
         self.frame_stack_interval = int(frame_stack_interval)
@@ -616,7 +636,14 @@ class Th06RLEnv:
     # Start a deterministic original-game episode.
     def reset(self, seed: int | None = None) -> dict[str, np.ndarray]:
         actual_seed = 0 if seed is None else int(seed)
-        self.snapshot = self.backend.reset(self.stage, self.difficulty, actual_seed)
+        self.snapshot = self.backend.reset(self.stage, self.difficulty, actual_seed, self.spell)
+        if self.spell > 0 and (
+            not self.snapshot.spell_active or self.snapshot.spell_ordinal != self.spell
+        ):
+            raise RuntimeError(
+                f"TH06 reset did not stop at stage spell {self.spell}: "
+                f"active={self.snapshot.spell_active}, ordinal={self.snapshot.spell_ordinal}."
+            )
         self.previous_action = 0
         self.steps = 0
         self.episode_reward = 0.0
@@ -669,7 +696,15 @@ class Th06RLEnv:
         self.last_observation = observation
         self._append_map_snapshot(observation)
         stage_finished = self.snapshot.supervisor_state != 2 or self.snapshot.game_completed
-        done = collided or stage_finished or (self.max_steps is not None and self.steps >= self.max_steps)
+        spell_finished = self.spell > 0 and (
+            not self.snapshot.spell_active or self.snapshot.spell_ordinal != self.spell
+        )
+        done = (
+            collided
+            or spell_finished
+            or stage_finished
+            or (self.max_steps is not None and self.steps >= self.max_steps)
+        )
         info = {
             "stage": self.snapshot.stage,
             "difficulty": self.snapshot.difficulty,
@@ -678,6 +713,10 @@ class Th06RLEnv:
             "decision_steps": self.steps,
             "collided": collided,
             "stage_finished": stage_finished,
+            "spell_finished": spell_finished,
+            "spell_active": self.snapshot.spell_active,
+            "spell_id": self.snapshot.spell_id,
+            "spell_ordinal": self.snapshot.spell_ordinal,
             "hp": self.snapshot.player.lives,
             "bullets": len(self.snapshot.bullets),
             "lasers": len(self.snapshot.lasers),

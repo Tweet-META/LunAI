@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from playfield_config import PLAYFIELD_SIZE
 
 load_dotenv(".env")
 
@@ -11,6 +12,8 @@ DEFAULT_GLOBAL_VOLUME = float(os.getenv("DEFAULT_GLOBAL_VOLUME"))
 DEFAULT_MUSIC_VOLUME = float(os.getenv("DEFAULT_MUSIC_VOLUME"))
 SIZE = WIDTH, HEIGHT
 GAME_ZONE = tuple(map(int, os.getenv("GAME_ZONE").split(', ')))
+if GAME_ZONE[2:] != PLAYFIELD_SIZE:
+    raise ValueError(f"GAME_ZONE size {GAME_ZONE[2:]} does not match {PLAYFIELD_SIZE}.")
 FPS = int(os.getenv("FPS"))
 FPS_RATIO = 1
 

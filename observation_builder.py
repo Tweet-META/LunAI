@@ -4,6 +4,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from playfield_config import PCCM_HALO_WIDTH, PLAYFIELD_SIZE, RED_SIZE, YELLOW_SIZE
+
+
+PCCM_OBSERVATION_MODES = ("occupancy_only", "static", "trajectory")
+
 
 @dataclass(frozen=True)
 class BulletState:
@@ -12,8 +17,6 @@ class BulletState:
     radius: float
     vx: float
     vy: float
-    half_width: float = 0.0
-    half_height: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -22,56 +25,25 @@ class PlayerState:
     y: float
     radius: float
     previous_action: int = 0
-    half_width: float = 0.0
-    half_height: float = 0.0
 
 
 @dataclass(frozen=True)
 class ObservationConfig:
-    playfield_width: int = 600
-    playfield_height: int = 700
-    playable_bounds: tuple[float, float, float, float] | None = None
+    playfield_width: int = PLAYFIELD_SIZE[0]
+    playfield_height: int = PLAYFIELD_SIZE[1]
     blue_grid: tuple[int, int] = (8, 8)
-    yellow_size: tuple[int, int] = (320, 320)
+    yellow_size: tuple[int, int] = YELLOW_SIZE
     yellow_grid: tuple[int, int] = (16, 16)
-    red_size: tuple[int, int] = (128, 128)
+    red_size: tuple[int, int] = RED_SIZE
     red_map: tuple[int, int] = (64, 64)
     pccm_prediction_frames: int = 5
-    pccm_halo_width: float = 32.0
+    pccm_halo_width: float = PCCM_HALO_WIDTH
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30
     pccm_soft_cap: float = 0.8
-
-
-# Return whether one hazard uses an axis-aligned rectangle.
-def is_aabb_hazard(hazard: BulletState) -> bool:
-    return hazard.half_width > 0.0 and hazard.half_height > 0.0
-
-
-# Expand one hazard by the player hitbox for point-based collision checks.
-def expand_hazard_for_player(hazard: BulletState, player: PlayerState) -> BulletState:
-    if is_aabb_hazard(hazard):
-        player_half_width = player.half_width if player.half_width > 0.0 else player.radius
-        player_half_height = player.half_height if player.half_height > 0.0 else player.radius
-        half_width = hazard.half_width + player_half_width
-        half_height = hazard.half_height + player_half_height
-        return BulletState(
-            x=hazard.x,
-            y=hazard.y,
-            radius=max(half_width, half_height),
-            vx=hazard.vx,
-            vy=hazard.vy,
-            half_width=half_width,
-            half_height=half_height,
-        )
-    return BulletState(
-        x=hazard.x,
-        y=hazard.y,
-        radius=hazard.radius + player.radius,
-        vx=hazard.vx,
-        vy=hazard.vy,
-    )
+    pccm_implementation: str = "reference"
+    pccm_observation_mode: str = "trajectory"
 
 
 # Return a player-centered window that may extend outside the field.
@@ -81,26 +53,28 @@ def centered_window(center_x: float, center_y: float, width: int, height: int) -
     return x1, y1, x1 + width, y1 + height
 
 
-# Rasterize circular and rectangular collision hitboxes into a binary map.
-def make_occupancy_map(width: int, height: int, bullets: list[BulletState]) -> np.ndarray:
+# Rasterize circular bullet hitboxes into a binary map.
+def make_occupancy_map(
+    width: int, height: int, bullets: list[BulletState], *, implementation: str = "reference",
+) -> np.ndarray:
+    if implementation == "numba":
+        from numba_occupancy import make_occupancy_map_numba
+
+        return make_occupancy_map_numba(width, height, bullets)
     occupancy = np.zeros((height, width), dtype=np.float32)
     for bullet in bullets:
-        half_width = bullet.half_width if is_aabb_hazard(bullet) else bullet.radius
-        half_height = bullet.half_height if is_aabb_hazard(bullet) else bullet.radius
-        x1 = max(0, int(np.floor(bullet.x - half_width)))
-        x2 = min(width, int(np.ceil(bullet.x + half_width)) + 1)
-        y1 = max(0, int(np.floor(bullet.y - half_height)))
-        y2 = min(height, int(np.ceil(bullet.y + half_height)) + 1)
+        r = max(1, int(np.ceil(bullet.radius)))
+        cx = int(round(bullet.x))
+        cy = int(round(bullet.y))
+        x1 = max(0, cx - r)
+        x2 = min(width, cx + r + 1)
+        y1 = max(0, cy - r)
+        y2 = min(height, cy + r + 1)
         if x1 >= x2 or y1 >= y2:
             continue
 
         yy, xx = np.ogrid[y1:y2, x1:x2]
-        if is_aabb_hazard(bullet):
-            mask = (np.abs(xx - bullet.x) <= bullet.half_width) & (
-                np.abs(yy - bullet.y) <= bullet.half_height
-            )
-        else:
-            mask = (xx - bullet.x) ** 2 + (yy - bullet.y) ** 2 <= bullet.radius ** 2
+        mask = (xx - bullet.x) ** 2 + (yy - bullet.y) ** 2 <= bullet.radius ** 2
         occupancy[y1:y2, x1:x2][mask] = 1.0
     return occupancy
 
@@ -147,7 +121,6 @@ def valid_area_grid(
     grid_shape: tuple[int, int],
     field_w: int,
     field_h: int,
-    playable_bounds: tuple[float, float, float, float] | None = None,
 ) -> np.ndarray:
     x1, y1, x2, y2 = window
     rows, cols = grid_shape
@@ -156,9 +129,8 @@ def valid_area_grid(
     cell_widths = np.diff(xs)
     cell_heights = np.diff(ys)
     cell_area = np.maximum(1, np.outer(cell_heights, cell_widths))
-    left, top, right, bottom = playable_bounds or (0.0, 0.0, float(field_w), float(field_h))
-    clipped_xs = np.clip(xs, left, right)
-    clipped_ys = np.clip(ys, top, bottom)
+    clipped_xs = np.clip(xs, 0, field_w)
+    clipped_ys = np.clip(ys, 0, field_h)
     playable_widths = np.maximum(0, np.diff(clipped_xs))
     playable_heights = np.maximum(0, np.diff(clipped_ys))
     playable_area = np.outer(playable_heights, playable_widths)
@@ -241,19 +213,15 @@ def environment_pccm_cost(
     wall_margin: float,
     upper_field_threshold: float,
     upper_field_cost: float,
-    playable_bounds: tuple[float, float, float, float] | None = None,
 ) -> np.ndarray:
-    left, top, right, bottom = playable_bounds or (0.0, 0.0, float(field_w), float(field_h))
-    playable_width = right - left
-    playable_height = bottom - top
-    horizontal_margin = max(1.0, playable_width * wall_margin)
-    vertical_margin = max(1.0, playable_height * wall_margin)
+    horizontal_margin = max(1.0, field_w * wall_margin)
+    vertical_margin = max(1.0, field_h * wall_margin)
     environment_cost = np.zeros(xx.shape, dtype=np.float32)
     wall_distances = (
-        (xx - left, horizontal_margin),
-        (right - xx, horizontal_margin),
-        (yy - top, vertical_margin),
-        (bottom - yy, vertical_margin),
+        (xx, horizontal_margin),
+        (field_w - xx, horizontal_margin),
+        (yy, vertical_margin),
+        (field_h - yy, vertical_margin),
     )
     for distance, margin in wall_distances:
         contribution = np.where(
@@ -263,18 +231,19 @@ def environment_pccm_cost(
         ).astype(np.float32)
         environment_cost = combine_soft_cost(environment_cost, contribution)
 
-    upper_boundary = top + max(1.0, playable_height * upper_field_threshold)
+    upper_boundary = max(1.0, field_h * upper_field_threshold)
     upper_contribution = np.where(
         inside,
-        upper_field_cost * np.clip(1.0 - (yy - top) / max(1.0, upper_boundary - top), 0.0, 1.0),
+        upper_field_cost * np.clip(1.0 - yy / upper_boundary, 0.0, 1.0),
         0.0,
     ).astype(np.float32)
     return combine_soft_cost(environment_cost, upper_contribution)
 
 
 # Build PCCM samples with full-grid NumPy broadcasting as the reference.
-def pccm_sample_components(
+def pccm_sample_components_reference(
     bullets: list[BulletState],
+    player_radius: float,
     window: tuple[int, int, int, int],
     sample_shape: tuple[int, int],
     field_w: int,
@@ -285,11 +254,9 @@ def pccm_sample_components(
     fps: float = 60.0,
     upper_field_threshold: float = 0.70,
     upper_field_cost: float = 0.30,
-    playable_bounds: tuple[float, float, float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     xx, yy = grid_cell_centers(window, sample_shape)
-    left, top, right, bottom = playable_bounds or (0.0, 0.0, float(field_w), float(field_h))
-    inside = (xx >= left) & (xx <= right) & (yy >= top) & (yy <= bottom)
+    inside = (xx >= 0.0) & (xx < field_w) & (yy >= 0.0) & (yy < field_h)
     current_cost = np.zeros(sample_shape, dtype=np.float32)
     prediction_cost = np.zeros(sample_shape, dtype=np.float32)
     hard_collision = np.zeros(sample_shape, dtype=np.float32)
@@ -301,15 +268,12 @@ def pccm_sample_components(
         for bullet in bullets:
             future_x = bullet.x + bullet.vx * horizon_seconds
             future_y = bullet.y + bullet.vy * horizon_seconds
-            half_width = bullet.half_width if is_aabb_hazard(bullet) else bullet.radius
-            half_height = bullet.half_height if is_aabb_hazard(bullet) else bullet.radius
-            padding_x = half_width + halo_width
-            padding_y = half_height + halo_width
+            padding = bullet.radius + player_radius + halo_width
             if (
-                max(bullet.x, future_x) + padding_x >= x1
-                and min(bullet.x, future_x) - padding_x < x2
-                and max(bullet.y, future_y) + padding_y >= y1
-                and min(bullet.y, future_y) - padding_y < y2
+                max(bullet.x, future_x) + padding >= x1
+                and min(bullet.x, future_x) - padding < x2
+                and max(bullet.y, future_y) + padding >= y1
+                and min(bullet.y, future_y) - padding < y2
             ):
                 relevant_bullets.append(bullet)
 
@@ -318,33 +282,18 @@ def pccm_sample_components(
             bullet_y = np.asarray([bullet.y for bullet in relevant_bullets], dtype=np.float32)
             velocity_x = np.asarray([bullet.vx for bullet in relevant_bullets], dtype=np.float32)
             velocity_y = np.asarray([bullet.vy for bullet in relevant_bullets], dtype=np.float32)
-            radii = np.asarray([max(0.1, bullet.radius) for bullet in relevant_bullets], dtype=np.float32)
-            half_widths = np.asarray(
-                [bullet.half_width if is_aabb_hazard(bullet) else 0.0 for bullet in relevant_bullets],
+            radii = np.asarray(
+                [max(1.0, bullet.radius + player_radius) for bullet in relevant_bullets],
                 dtype=np.float32,
             )
-            half_heights = np.asarray(
-                [bullet.half_height if is_aabb_hazard(bullet) else 0.0 for bullet in relevant_bullets],
-                dtype=np.float32,
-            )
-            aabb_mask = np.asarray([is_aabb_hazard(bullet) for bullet in relevant_bullets], dtype=bool)
             times = np.arange(prediction_frames + 1, dtype=np.float32) / fps
             future_x = bullet_x[:, None] + velocity_x[:, None] * times[None, :]
             future_y = bullet_y[:, None] + velocity_y[:, None] * times[None, :]
             dx = xx[None, None, :, :] - future_x[:, :, None, None]
             dy = yy[None, None, :, :] - future_y[:, :, None, None]
             distances = np.sqrt(dx * dx + dy * dy)
-            circle_outside = np.maximum(0.0, distances - radii[:, None, None, None])
-            box_dx = np.maximum(0.0, np.abs(dx) - half_widths[:, None, None, None])
-            box_dy = np.maximum(0.0, np.abs(dy) - half_heights[:, None, None, None])
-            box_outside = np.sqrt(box_dx * box_dx + box_dy * box_dy)
-            outside_distance = np.where(
-                aabb_mask[:, None, None, None],
-                box_outside,
-                circle_outside,
-            )
             falloff = np.clip(
-                1.0 - outside_distance / halo_width,
+                1.0 - np.maximum(0.0, distances - radii[:, None, None, None]) / halo_width,
                 0.0,
                 1.0,
             )
@@ -353,12 +302,8 @@ def pccm_sample_components(
             contributions *= inside[None, None, :, :]
             current_cost = 1.0 - np.prod(1.0 - contributions[:, 0], axis=0)
             prediction_cost = 1.0 - np.prod(1.0 - contributions[:, 1:], axis=(0, 1))
-            circle_hard = distances[:, 0] <= radii[:, None, None]
-            box_hard = (np.abs(dx[:, 0]) <= half_widths[:, None, None]) & (
-                np.abs(dy[:, 0]) <= half_heights[:, None, None]
-            )
             hard_collision = np.any(
-                np.where(aabb_mask[:, None, None], box_hard, circle_hard),
+                distances[:, 0] <= radii[:, None, None],
                 axis=0,
             ).astype(np.float32)
 
@@ -371,16 +316,250 @@ def pccm_sample_components(
         wall_margin,
         upper_field_threshold,
         upper_field_cost,
-        playable_bounds,
     )
 
     hard_collision[~inside] = 0.0
     return current_cost, prediction_cost, wall_cost, hard_collision
 
 
+# Convert one world-space support box into conservative sample-grid bounds.
+def pccm_roi_bounds_from_aabb(
+    minimum_x: float,
+    minimum_y: float,
+    maximum_x: float,
+    maximum_y: float,
+    window: tuple[int, int, int, int],
+    sample_shape: tuple[int, int],
+) -> tuple[int, int, int, int] | None:
+    x1, y1, x2, y2 = window
+    rows, cols = sample_shape
+    cell_width = (x2 - x1) / cols
+    cell_height = (y2 - y1) / rows
+
+    # The extra outward sample is harmless because the exact falloff becomes zero.
+    col1 = max(0, int(np.floor((minimum_x - x1) / cell_width - 0.5)))
+    col2 = min(cols, int(np.ceil((maximum_x - x1) / cell_width - 0.5)) + 1)
+    row1 = max(0, int(np.floor((minimum_y - y1) / cell_height - 0.5)))
+    row2 = min(rows, int(np.ceil((maximum_y - y1) / cell_height - 0.5)) + 1)
+    if col1 >= col2 or row1 >= row2:
+        return None
+    return row1, row2, col1, col2
+
+
+# Convert one circular support area into conservative sample-grid bounds.
+def pccm_roi_bounds(
+    center_x: float,
+    center_y: float,
+    support_radius: float,
+    window: tuple[int, int, int, int],
+    sample_shape: tuple[int, int],
+) -> tuple[int, int, int, int] | None:
+    return pccm_roi_bounds_from_aabb(
+        center_x - support_radius,
+        center_y - support_radius,
+        center_x + support_radius,
+        center_y + support_radius,
+        window,
+        sample_shape,
+    )
+
+
+# Build PCCM samples by evaluating each bullet only inside its exact support ROI.
+def pccm_sample_components_roi(
+    bullets: list[BulletState],
+    player_radius: float,
+    window: tuple[int, int, int, int],
+    sample_shape: tuple[int, int],
+    field_w: int,
+    field_h: int,
+    prediction_frames: int,
+    halo_width: float,
+    wall_margin: float,
+    fps: float = 60.0,
+    upper_field_threshold: float = 0.70,
+    upper_field_cost: float = 0.30,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    xx, yy = grid_cell_centers(window, sample_shape)
+    inside = (xx >= 0.0) & (xx < field_w) & (yy >= 0.0) & (yy < field_h)
+    current_cost = np.zeros(sample_shape, dtype=np.float32)
+    prediction_cost = np.zeros(sample_shape, dtype=np.float32)
+    hard_collision = np.zeros(sample_shape, dtype=np.float32)
+    times = np.arange(prediction_frames + 1, dtype=np.float32) / np.float32(fps)
+    time_weights = 1.0 - np.arange(
+        prediction_frames + 1,
+        dtype=np.float32,
+    ) / np.float32(prediction_frames + 1.0)
+
+    x1, y1, x2, y2 = window
+    horizon_seconds = prediction_frames / fps
+    relevant_bullets = []
+    for bullet in bullets:
+        future_x = bullet.x + bullet.vx * horizon_seconds
+        future_y = bullet.y + bullet.vy * horizon_seconds
+        padding = bullet.radius + player_radius + halo_width
+        if (
+            max(bullet.x, future_x) + padding >= x1
+            and min(bullet.x, future_x) - padding < x2
+            and max(bullet.y, future_y) + padding >= y1
+            and min(bullet.y, future_y) - padding < y2
+        ):
+            relevant_bullets.append(bullet)
+
+    for bullet in relevant_bullets:
+        bullet_x = np.float32(bullet.x)
+        bullet_y = np.float32(bullet.y)
+        velocity_x = np.float32(bullet.vx)
+        velocity_y = np.float32(bullet.vy)
+        collision_radius = np.float32(max(1.0, bullet.radius + player_radius))
+        support_radius = float(collision_radius + np.float32(halo_width))
+        future_x = bullet_x + velocity_x * times
+        future_y = bullet_y + velocity_y * times
+
+        current_bounds = pccm_roi_bounds(
+            float(future_x[0]),
+            float(future_y[0]),
+            support_radius,
+            window,
+            sample_shape,
+        )
+        if current_bounds is not None:
+            row1, row2, col1, col2 = current_bounds
+            local_x = xx[row1:row2, col1:col2]
+            local_y = yy[row1:row2, col1:col2]
+            local_inside = inside[row1:row2, col1:col2]
+            dx = local_x - future_x[0]
+            dy = local_y - future_y[0]
+            distances = np.sqrt(dx * dx + dy * dy)
+            falloff = np.clip(
+                1.0 - np.maximum(0.0, distances - collision_radius) / halo_width,
+                0.0,
+                1.0,
+            )
+            contribution = (np.float32(0.5) * falloff * local_inside).astype(np.float32)
+            target = current_cost[row1:row2, col1:col2]
+            target[:] = combine_soft_cost(target, contribution)
+            hard_target = hard_collision[row1:row2, col1:col2]
+            hard_target[(distances <= collision_radius) & local_inside] = 1.0
+
+        if prediction_frames > 0:
+            prediction_bounds = pccm_roi_bounds_from_aabb(
+                float(np.min(future_x[1:])) - support_radius,
+                float(np.min(future_y[1:])) - support_radius,
+                float(np.max(future_x[1:])) + support_radius,
+                float(np.max(future_y[1:])) + support_radius,
+                window,
+                sample_shape,
+            )
+            if prediction_bounds is not None:
+                row1, row2, col1, col2 = prediction_bounds
+                local_x = xx[row1:row2, col1:col2]
+                local_y = yy[row1:row2, col1:col2]
+                local_inside = inside[row1:row2, col1:col2]
+                dx = local_x[None, :, :] - future_x[1:, None, None]
+                dy = local_y[None, :, :] - future_y[1:, None, None]
+                distances = np.sqrt(dx * dx + dy * dy)
+                falloff = np.clip(
+                    1.0 - np.maximum(0.0, distances - collision_radius) / halo_width,
+                    0.0,
+                    1.0,
+                )
+                contributions = (
+                    np.float32(0.5)
+                    * falloff
+                    * time_weights[1:, None, None]
+                    * local_inside[None, :, :]
+                ).astype(np.float32)
+                combined_contribution = 1.0 - np.prod(1.0 - contributions, axis=0)
+                target = prediction_cost[row1:row2, col1:col2]
+                target[:] = combine_soft_cost(target, combined_contribution)
+
+    wall_cost = environment_pccm_cost(
+        xx,
+        yy,
+        inside,
+        field_w,
+        field_h,
+        wall_margin,
+        upper_field_threshold,
+        upper_field_cost,
+    )
+
+    hard_collision[~inside] = 0.0
+    return current_cost, prediction_cost, wall_cost, hard_collision
+
+
+# Select the PCCM sampler while keeping both implementations directly testable.
+def pccm_sample_components(
+    bullets: list[BulletState],
+    player_radius: float,
+    window: tuple[int, int, int, int],
+    sample_shape: tuple[int, int],
+    field_w: int,
+    field_h: int,
+    prediction_frames: int,
+    halo_width: float,
+    wall_margin: float,
+    fps: float = 60.0,
+    implementation: str = "reference",
+    upper_field_threshold: float = 0.70,
+    upper_field_cost: float = 0.30,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if implementation == "numba":
+        from numba_pccm import pccm_sample_components_numba
+
+        return pccm_sample_components_numba(
+            bullets, player_radius, window, sample_shape, field_w, field_h,
+            prediction_frames, halo_width, wall_margin, fps,
+            upper_field_threshold, upper_field_cost,
+        )
+    if implementation in {"torch_cpu", "torch_cuda"}:
+        from torch_pccm import pccm_sample_components_torch
+
+        return pccm_sample_components_torch(
+            bullets,
+            player_radius,
+            window,
+            sample_shape,
+            field_w,
+            field_h,
+            prediction_frames,
+            halo_width,
+            wall_margin,
+            fps,
+            upper_field_threshold,
+            upper_field_cost,
+            device="cuda" if implementation == "torch_cuda" else "cpu",
+        )
+    if implementation == "auto":
+        # Broadcasting wins on the tiny blue grid; ROI wins on 32x32 samples.
+        implementation = "roi" if sample_shape[0] * sample_shape[1] >= 1024 else "reference"
+    implementations = {
+        "reference": pccm_sample_components_reference,
+        "roi": pccm_sample_components_roi,
+    }
+    sampler = implementations.get(implementation)
+    if sampler is None:
+        raise ValueError(f"Unknown PCCM implementation: {implementation}.")
+    return sampler(
+        bullets,
+        player_radius,
+        window,
+        sample_shape,
+        field_w,
+        field_h,
+        prediction_frames,
+        halo_width,
+        wall_margin,
+        fps,
+        upper_field_threshold,
+        upper_field_cost,
+    )
+
+
 # Project one continuous PCCM rule directly into a target observation grid.
 def projected_pccm(
     bullets: list[BulletState],
+    player_radius: float,
     window: tuple[int, int, int, int],
     output_shape: tuple[int, int],
     sample_shape: tuple[int, int],
@@ -390,12 +569,13 @@ def projected_pccm(
     halo_width: float,
     wall_margin: float,
     soft_cap: float,
+    implementation: str = "reference",
     upper_field_threshold: float = 0.70,
     upper_field_cost: float = 0.30,
-    playable_bounds: tuple[float, float, float, float] | None = None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     current, prediction, wall, hard = pccm_sample_components(
         bullets,
+        player_radius,
         window,
         sample_shape,
         field_w,
@@ -403,9 +583,9 @@ def projected_pccm(
         prediction_frames,
         halo_width,
         wall_margin,
+        implementation=implementation,
         upper_field_threshold=upper_field_threshold,
         upper_field_cost=upper_field_cost,
-        playable_bounds=playable_bounds,
     )
     if sample_shape[0] > output_shape[0] or sample_shape[1] > output_shape[1]:
         current = top_fraction_pool(current, output_shape)
@@ -429,15 +609,41 @@ def projected_pccm(
     soft = combine_soft_cost(combine_soft_cost(current, prediction), wall)
     final = np.clip(soft, 0.0, soft_cap).astype(np.float32)
     final[hard > 0.0] = 1.0
-    return final
+    return current.astype(np.float32), prediction.astype(np.float32), wall.astype(np.float32), final
+
+
+# Select the PCCM map exposed to the policy without changing the full reward map.
+def visible_pccm(
+    components: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    mode: str,
+    soft_cap: float,
+) -> np.ndarray:
+    current, _, environment, trajectory = components
+    if mode == "occupancy_only":
+        return np.zeros_like(trajectory, dtype=np.float32)
+    if mode == "trajectory":
+        return trajectory.copy()
+    if mode != "static":
+        raise ValueError(f"Unknown PCCM observation mode: {mode}.")
+
+    static = combine_soft_cost(current, environment)
+    static = np.clip(static, 0.0, soft_cap).astype(np.float32)
+    static[trajectory >= 1.0] = 1.0
+    return static
 
 
 def red_occupancy_map(
     bullets: list[BulletState],
     window: tuple[int, int, int, int],
     map_shape: tuple[int, int],
+    *,
+    implementation: str = "reference",
 ) -> np.ndarray:
     # Build the local red-zone collision occupancy map.
+    if implementation == "numba":
+        from numba_occupancy import red_occupancy_map_numba
+
+        return red_occupancy_map_numba(bullets, window, map_shape)
     x1, y1, x2, y2 = window
     rows, cols = map_shape
     occupancy = np.zeros((rows, cols), dtype=np.float32)
@@ -445,12 +651,10 @@ def red_occupancy_map(
     win_h = max(1, y2 - y1)
 
     for bullet in bullets:
-        half_width = bullet.half_width if is_aabb_hazard(bullet) else bullet.radius
-        half_height = bullet.half_height if is_aabb_hazard(bullet) else bullet.radius
-        bx1 = bullet.x - half_width
-        bx2 = bullet.x + half_width
-        by1 = bullet.y - half_height
-        by2 = bullet.y + half_height
+        bx1 = bullet.x - bullet.radius
+        bx2 = bullet.x + bullet.radius
+        by1 = bullet.y - bullet.radius
+        by2 = bullet.y + bullet.radius
         if bx2 < x1 or bx1 >= x2 or by2 < y1 or by1 >= y2:
             continue
 
@@ -464,12 +668,7 @@ def red_occupancy_map(
         yy, xx = np.ogrid[row1:row2, col1:col2]
         cell_x = x1 + (xx + 0.5) * win_w / cols
         cell_y = y1 + (yy + 0.5) * win_h / rows
-        if is_aabb_hazard(bullet):
-            mask = (np.abs(cell_x - bullet.x) <= bullet.half_width) & (
-                np.abs(cell_y - bullet.y) <= bullet.half_height
-            )
-        else:
-            mask = (cell_x - bullet.x) ** 2 + (cell_y - bullet.y) ** 2 <= bullet.radius ** 2
+        mask = (cell_x - bullet.x) ** 2 + (cell_y - bullet.y) ** 2 <= bullet.radius ** 2
         occupancy[row1:row2, col1:col2][mask] = 1.0
 
     return occupancy
@@ -491,62 +690,45 @@ class ObservationBuilder:
             raise ValueError("PCCM upper-field cost must be in [0, soft cap).")
         if not 0.0 < self.config.pccm_soft_cap < 1.0:
             raise ValueError("PCCM soft cap must be in (0, 1).")
-        if self.config.playable_bounds is not None:
-            left, top, right, bottom = self.config.playable_bounds
-            if not (
-                0.0 <= left < right <= self.config.playfield_width
-                and 0.0 <= top < bottom <= self.config.playfield_height
-            ):
-                raise ValueError("Playable bounds must stay inside the playfield.")
+        if self.config.pccm_implementation not in {"auto", "reference", "roi", "torch_cpu", "torch_cuda", "numba"}:
+            raise ValueError(f"Unknown PCCM implementation: {self.config.pccm_implementation}.")
+        if self.config.pccm_observation_mode not in PCCM_OBSERVATION_MODES:
+            raise ValueError(f"Unknown PCCM observation mode: {self.config.pccm_observation_mode}.")
 
     # Build the full fixed-size observation dictionary.
     def build(self, bullets: list[BulletState], player: PlayerState) -> dict[str, np.ndarray]:
         cfg = self.config
         full_window = (0, 0, cfg.playfield_width, cfg.playfield_height)
-        playable_bounds = cfg.playable_bounds or (
-            0.0,
-            0.0,
-            float(cfg.playfield_width),
-            float(cfg.playfield_height),
-        )
         yellow_window = centered_window(player.x, player.y, cfg.yellow_size[0], cfg.yellow_size[1])
         red_window = centered_window(player.x, player.y, cfg.red_size[0], cfg.red_size[1])
 
-        collision_bullets = [expand_hazard_for_player(bullet, player) for bullet in bullets]
-        occupancy = make_occupancy_map(cfg.playfield_width, cfg.playfield_height, collision_bullets)
+        collision_bullets = [
+            BulletState(
+                x=bullet.x,
+                y=bullet.y,
+                radius=bullet.radius + player.radius,
+                vx=bullet.vx,
+                vy=bullet.vy,
+            )
+            for bullet in bullets
+        ]
+        occupancy = make_occupancy_map(
+            cfg.playfield_width, cfg.playfield_height, collision_bullets,
+            implementation=cfg.pccm_implementation,
+        )
         integral = make_integral_image(occupancy)
-        blue_valid = valid_area_grid(
-            full_window,
-            cfg.blue_grid,
-            cfg.playfield_width,
-            cfg.playfield_height,
-            playable_bounds,
-        )
-        yellow_valid = valid_area_grid(
-            yellow_window,
-            cfg.yellow_grid,
-            cfg.playfield_width,
-            cfg.playfield_height,
-            playable_bounds,
-        )
-        red_valid = valid_area_grid(
-            red_window,
-            cfg.red_map,
-            cfg.playfield_width,
-            cfg.playfield_height,
-            playable_bounds,
-        )
+        yellow_valid = valid_area_grid(yellow_window, cfg.yellow_grid, cfg.playfield_width, cfg.playfield_height)
+        red_valid = valid_area_grid(red_window, cfg.red_map, cfg.playfield_width, cfg.playfield_height)
         player_x = np.clip(player.x / cfg.playfield_width, 0.0, 1.0)
         player_y = np.clip(player.y / cfg.playfield_height, 0.0, 1.0)
-        left, top, right, bottom = playable_bounds
-        left_margin = np.clip((player.x - left) / (right - left), 0.0, 1.0)
-        right_margin = np.clip((right - player.x) / (right - left), 0.0, 1.0)
-        top_margin = np.clip((player.y - top) / (bottom - top), 0.0, 1.0)
-        bottom_margin = np.clip((bottom - player.y) / (bottom - top), 0.0, 1.0)
+        left_margin = player_x
+        right_margin = 1.0 - player_x
+        top_margin = player_y
+        bottom_margin = 1.0 - player_y
 
         observation = {
             "blue_density": density_grid(integral, full_window, cfg.blue_grid),
-            "blue_valid": blue_valid,
+            "blue_valid": np.ones(cfg.blue_grid, dtype=np.float32),
             "yellow_density": density_grid(integral, yellow_window, cfg.yellow_grid),
             "yellow_valid": yellow_valid,
             "red_valid": red_valid,
@@ -573,9 +755,11 @@ class ObservationBuilder:
             collision_bullets,
             red_window,
             cfg.red_map,
+            implementation=cfg.pccm_implementation,
         )
-        blue_pccm = projected_pccm(
-            collision_bullets,
+        blue_components = projected_pccm(
+            bullets,
+            player.radius,
             full_window,
             cfg.blue_grid,
             (16, 16),
@@ -585,12 +769,13 @@ class ObservationBuilder:
             cfg.pccm_halo_width,
             cfg.pccm_wall_margin,
             cfg.pccm_soft_cap,
+            implementation=cfg.pccm_implementation,
             upper_field_threshold=cfg.pccm_upper_field_threshold,
             upper_field_cost=cfg.pccm_upper_field_cost,
-            playable_bounds=playable_bounds,
         )
-        yellow_pccm = projected_pccm(
-            collision_bullets,
+        yellow_components = projected_pccm(
+            bullets,
+            player.radius,
             yellow_window,
             cfg.yellow_grid,
             (32, 32),
@@ -600,12 +785,13 @@ class ObservationBuilder:
             cfg.pccm_halo_width,
             cfg.pccm_wall_margin,
             cfg.pccm_soft_cap,
+            implementation=cfg.pccm_implementation,
             upper_field_threshold=cfg.pccm_upper_field_threshold,
             upper_field_cost=cfg.pccm_upper_field_cost,
-            playable_bounds=playable_bounds,
         )
-        red_pccm = projected_pccm(
-            collision_bullets,
+        red_components = projected_pccm(
+            bullets,
+            player.radius,
             red_window,
             cfg.red_map,
             (32, 32),
@@ -615,20 +801,27 @@ class ObservationBuilder:
             cfg.pccm_halo_width,
             cfg.pccm_wall_margin,
             cfg.pccm_soft_cap,
+            implementation=cfg.pccm_implementation,
             upper_field_threshold=cfg.pccm_upper_field_threshold,
             upper_field_cost=cfg.pccm_upper_field_cost,
-            playable_bounds=playable_bounds,
         )
-        red_pccm[red_valid <= 0.0] = 0.0
-        red_pccm[(red_occ > 0.0) & (red_valid > 0.0)] = 1.0
+        reward_red_pccm = red_components[3].copy()
+        reward_red_pccm[red_occ > 0.0] = 1.0
+        red_visible_pccm = visible_pccm(
+            red_components,
+            cfg.pccm_observation_mode,
+            cfg.pccm_soft_cap,
+        )
+        if cfg.pccm_observation_mode != "occupancy_only":
+            red_visible_pccm[red_occ > 0.0] = 1.0
 
         observation.update(
             {
-                "blue_pccm": blue_pccm,
-                "yellow_pccm": yellow_pccm,
+                "blue_pccm": visible_pccm(blue_components, cfg.pccm_observation_mode, cfg.pccm_soft_cap),
+                "yellow_pccm": visible_pccm(yellow_components, cfg.pccm_observation_mode, cfg.pccm_soft_cap),
                 "red_occupancy": red_occ,
-                "red_pccm": red_pccm,
-                "_reward_red_pccm": red_pccm.copy(),
+                "red_pccm": red_visible_pccm,
+                "_reward_red_pccm": reward_red_pccm,
             }
         )
         return observation

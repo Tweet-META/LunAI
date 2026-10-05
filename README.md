@@ -1,107 +1,121 @@
 # LunAI
 
-LunAI is a reinforcement learning project for training bullet-hell game agents in a pygame-based Touhou-style environment.
+The current main project uses the Pygame environment and code copied from LunAI-experiments. Run commands from this directory so imports, level files, assets, checkpoints, and logs resolve locally. Existing checkpoints, training history, legacy code and older levels are retained. The native TH06 adapter files are retained separately; the current training and evaluation entry points use Pygame.
 
-The current project focuses on a multi-scale, multi-frame CNN PPO agent. Earlier MLP PPO and DQN implementations are archived under `rl/legacy/`.
-
-## Project Scope
-
-This repository includes:
-
-- a modified pygame Touhou-style game environment
-- blue/yellow/red multi-scale observation maps
-- Potential Collision Cost Maps (PCCM) with short-horizon bullet prediction
-- playable-area masks for player-centered local maps
-- RL environment wrappers
-- reward function design
-- CNN PPO training and evaluation scripts
-- legacy MLP PPO and DQN code under `rl/legacy/`
-- curriculum levels for staged training
-- evaluation and visualization tools
-
-## RL Entry Points
-
-Archived MLP PPO baseline:
+## Setup
 
 ```powershell
-python rl/legacy/train_ppo.py --episodes 300 --level-file level_1.json
+pip install -r requirements.txt
 ```
 
-CNN PPO main training path:
+## Observation-scale ablations
 
 ```powershell
+python rl/train_ppo_cnn.py --config config_red_only.json
+python rl/train_ppo_cnn.py --config config_red_blue.json
 python rl/train_ppo_cnn.py --config config.json
 ```
 
-`config.json` stores only intentional overrides for the current experiment. Omitted settings use the training script defaults, while command-line values override both. Reward values are kept together in `rl/reward.py`.
+The inactive scales are zero-masked inside the unchanged three-branch network, so `red_only`, `red_blue`, and `full` retain the same trainable parameter count.
+
+## PCCM ablations
+
+Use distinct output paths for every run:
 
 ```powershell
-python rl/train_ppo_cnn.py --config config.json --max-total-frame-steps 1000000
+python rl/train_ppo_cnn.py --config config.json --pccm-observation-mode occupancy_only --model-path checkpoints/occupancy_seed0.pt --log-path training_logs/occupancy_seed0.csv
+python rl/train_ppo_cnn.py --config config.json --pccm-observation-mode static --model-path checkpoints/static_seed0.pt --log-path training_logs/static_seed0.csv
+python rl/train_ppo_cnn.py --config config.json --pccm-observation-mode trajectory --model-path checkpoints/trajectory_seed0.pt --log-path training_logs/trajectory_seed0.csv
 ```
 
-Each new PPO log begins with a `# run_config:` JSON line containing the final effective parameters, including any command-line overrides.
-
-### Experimental Original TH06 Adapter
-
-An experimental standalone adapter built from `AgentMystia/th6_web` runs the original Touhou 6 logic as a native headless child process. It reads player, bullet, laser, and enemy state and converts it into the same multi-scale PCCM observation used by LunAI. Optional rendering is provided by the Python environment and is never enabled during headless training. See [docs/th06_native_adapter.md](docs/th06_native_adapter.md).
-
-`global_step` means a policy decision. `total_frame_steps` means actual game frames and is the recommended unit for comparing training budgets. Training and evaluation both end an episode on the first valid collision.
-
-Checkpoints store the action repeat, frame-stack settings, optimizer state, and cumulative training counters. Evaluation uses the saved environment settings unless they are explicitly overridden. Continued training appends to an existing log and resumes the cumulative schedule, while starting from a fresh environment episode.
-
-### PCCM (Potential Collision Cost Map) Observation
-
-The fixed PCCM observation keeps the three CNN map branches and gives every scale three channels per frame:
-
-- bullet occupancy or density
-- projected PCCM risk
-- playable-area mask
-
-PCCM uses each bullet's own position, hitbox, and velocity to estimate current soft danger and the next five game frames. Bullet buffers, predicted trajectories, and four wall costs use soft probabilistic composition capped below hard collision. Current collision regions are then restored to `1.0`.
-
-The current environment prior also assigns the upper 70% of the playfield a mild PCCM cost that increases linearly from `0.0` at the boundary to `0.3` at the top. It is softly composed with wall and bullet costs rather than treated as a hard collision.
-
-The implementation does not build a full-screen PCCM. It samples the same world-space cost rule directly at each scale, uses internal supersampling for yellow and blue maps, and preserves the exact `64x64` red occupancy. The main environment uses the full-grid NumPy implementation. Multi-frame stacking remains enabled so the CNN can still learn non-linear changes that the short constant-velocity prediction cannot describe.
-
-Paper baselines, ablation switches, extrapolation levels, plotting scripts, and PCCM profiling implementations are available on the standalone [`experiments`](https://github.com/Tweet-META/LunAI/tree/experiments) branch.
-
-PCCM checkpoints store their prediction horizon, halo width, and wall margin to prevent silent evaluation mismatches.
-
-### Parallel Environment Sampling
-
-`--num-envs` defaults to `1`; the current `config.json` uses `8`. It can use several headless game environments on a CUDA-capable machine while keeping one shared CNN PPO model in the main process:
+## Evaluation and profiling
 
 ```powershell
-python rl/train_ppo_cnn.py --config config.json
+python rl/evaluate_ppo_cnn.py --model-path checkpoints/trajectory_seed0.pt --episodes 150 --level-file level_6.json --log-path evaluation_logs/trajectory_seed0_level6.csv
+python rl/evaluate_random_agent.py --episodes 150 --level-file level_6.json --log-path evaluation_logs/random_level6.csv
+python tools/benchmark_pccm_roi.py
+python tools/benchmark_pccm_level.py
 ```
 
-The environment workers run pygame and observation building on CPU. The main process batches their observations for one GPU model, so workers do not create separate models or checkpoints. `rollout_steps` is the total PPO batch size and must be divisible by `num_envs`. Parallel training cannot use `--render`, and CNN logs include an `env_id` column.
+The project now includes observation-scale and PCCM ablation switches, reconstructed TH06 spell-card levels, and profiling implementations. The copied `config.json` uses a 1M-frame budget and a 2160-frame episode cap; the formal paper experiment instead uses the 2M/1800-frame settings in `tools/run_formal_9_1_seeds.ps1`.
 
-PCCM logs also record mean local risk, blocked-movement ratio, wall-time ratio, and all nine episode action counts.
+## Optional PyTorch PCCM prototype
 
-The main reward applies a persistent `0.1 * current_local_PCCM` penalty on every non-collision frame.
+The default PCCM implementation remains `reference`. On a CUDA machine, first
+compare the PyTorch output with the reference and measure complete observation
+builds on a real level:
 
-## Acknowledgements
+```powershell
+python -m unittest tests.test_torch_pccm -v
+python tools/benchmark_pccm_torch.py --level-file level_th06_stage3_spell2.json
+```
 
-The game environment in this project is adapted from [`NumPix/pygame-touhou`](https://github.com/NumPix/pygame-touhou), which is licensed under the MIT License.
+The benchmark stops if any PCCM value differs by more than `5e-4`. To try the
+optional backend in a separate training run, add `--pccm-implementation torch_cuda`
+and use a new checkpoint and log path. This prototype still builds
+one observation per environment process and returns NumPy maps; a reported GPU
+kernel time alone does not establish a training speedup.
 
-The reinforcement learning components, including the observation representation, reward design, environment wrapper, curriculum levels, training scripts, evaluation tools, and visualization utilities, were developed for the LunAI project.
+## Optional Numba CPU PCCM
 
-All Touhou Project characters, music, and related intellectual property belong to ZUN and Team Shanghai Alice.
+The `numba` backend fuses distance, halo and probability-product operations into
+a single-threaded compiled loop, avoiding the large bullet/time/grid temporary
+arrays. It also compiles full-field and red-zone circular occupancy rasterization,
+preserving the original float64 geometry, clipping, rounding and pixel-center
+rules. Occupancy masks and density inputs must match exactly. PCCM uses float32
+without fast-math. Collision detection is unchanged and `reference` remains the
+default. Install only the optional dependency:
 
-## Controls
+```powershell
+python -m pip install -r requirements-numba.txt
+python -m unittest tests.test_numba_pccm tests.test_numba_occupancy -v
+python tools/benchmark_pccm_numba.py
+```
 
-### Game
+The benchmark checks every sampled snapshot against the reference (maximum
+absolute PCCM error `3e-6`) and compares complete observation builds on all three
+stage-3 spells. It prints bullet counts and separates first-build compilation
+or cache loading from steady-state timings. For one level, pass
+`--level-file level_th06_stage3_spell2.json`; optionally save a report with
+`--json-path evaluation_logs/numba_benchmark.json`.
+Add `--compare-occupancy` to also measure `numba_pccm_only`, reproducing the
+earlier backend with reference occupancy. This isolates the extra speedup from
+compiled rasterization on the same snapshots and in alternating measurement order.
 
-- Move: arrow keys
-- Shoot: `Z`
-- Slow movement: `Shift`
+After checking speed on the training machine, add `--pccm-implementation numba`
+to training or evaluation. PPO's `--device` remains independent. Each environment
+process uses one compiled CPU thread; first use can pause for compilation/cache
+loading. Observation timing does not establish the full PPO training speedup.
 
-### Menu
+To include game updates, rewards and four-frame CNN input preparation, and
+separately attribute CPU hot paths:
 
-- Select: `Enter` or `Z`
-- Cancel: `X`
+```powershell
+python tools/profile_env_cpu.py
+```
 
-## License
+This writes `evaluation_logs/cpu_environment_profile.json`. Timing passes run
+without instrumentation; a separate pass measures components (entries marked
+`nested` are contained in other components and must not be added again). The
+workload uses a stationary invincible player and continues after collision
+signals to compare the same dense frames. This is a performance diagnostic,
+not survival evaluation. It excludes model inference, PPO updates and IPC.
 
-This project is released under the MIT License. The original game environment copyright notice is preserved in [LICENSE](LICENSE).
+## Yellow-gap diagnostic preview
+
+`level_yellow_gap_diagnostic.json` is a synthetic 30-second level with 30 seeded,
+single-row descending walls. Each wall has one gap in the middle of the field.
+The next gap is 32–80 pixels from the previous one, so the passage changes
+without jumping beyond the Yellow observation window. The player starts centered.
+It is separate from the three TH06 spell-card training levels.
+
+```powershell
+python tools/preview_yellow_gap.py --policy oracle --seed 10001
+python tools/preview_yellow_gap.py --policy manual --seed 10001
+python tools/preview_yellow_gap.py --policy oracle --seed 10001 --debug
+```
+
+The oracle reads the hidden answer to check physical reachability. It is not an
+agent result. In manual mode, use arrow keys or WASD. The debug view shows the
+three observation scales. A collision ends the run; repeat with another seed
+to inspect a different left/right sequence.

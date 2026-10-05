@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 import pygame
+from playfield_config import PCCM_HALO_WIDTH, RED_SIZE, YELLOW_SIZE
 
 from rl.reward import (
     blocked_movement_ratio,
@@ -49,15 +50,17 @@ class TouhouRLEnv:
         level_files: Sequence[str] | None = None,
         level_spawn_time_jitter: float = 0.0,
         random_player_start: bool = False,
-        player_start_margin: float = 80.0,
+        player_start_margin: float = 51.2,
         frame_stack: int = 1,
         frame_stack_interval: int = 1,
         pccm_prediction_frames: int = 5,
-        pccm_halo_width: float = 32.0,
+        pccm_halo_width: float = PCCM_HALO_WIDTH,
         pccm_wall_margin: float = 0.12,
         pccm_upper_field_threshold: float = 0.70,
         pccm_upper_field_cost: float = 0.30,
-        render_fps: int | None = None,
+        pccm_observation_mode: str = "trajectory",
+        pccm_implementation: str = "reference",
+        pccm_reward_weight: float = 0.0,
         render_debug: bool = False,
     ):
         if not 1 <= int(frame_stack) <= 5:
@@ -72,6 +75,8 @@ class TouhouRLEnv:
             raise ValueError("At least one non-empty level file is required.")
         if float(level_spawn_time_jitter) < 0.0:
             raise ValueError(f"level_spawn_time_jitter must be non-negative, got {level_spawn_time_jitter}.")
+        if float(pccm_reward_weight) < 0.0:
+            raise ValueError(f"pccm_reward_weight must be non-negative, got {pccm_reward_weight}.")
         self.level_file = level_file
         self.level_files = configured_levels
         self.level_spawn_time_jitter = float(level_spawn_time_jitter)
@@ -87,6 +92,9 @@ class TouhouRLEnv:
         self.pccm_wall_margin = float(pccm_wall_margin)
         self.pccm_upper_field_threshold = float(pccm_upper_field_threshold)
         self.pccm_upper_field_cost = float(pccm_upper_field_cost)
+        self.pccm_observation_mode = str(pccm_observation_mode)
+        self.pccm_implementation = str(pccm_implementation)
+        self.pccm_reward_weight = float(pccm_reward_weight)
         self.render_debug = bool(render_debug)
         self._configure_pygame()
 
@@ -95,9 +103,6 @@ class TouhouRLEnv:
         from observation_builder import ObservationBuilder, ObservationConfig
 
         self.FPS = FPS
-        self.render_fps = self.FPS if render_fps is None else int(render_fps)
-        if self.render_fps <= 0:
-            raise ValueError(f"render_fps must be positive, got {render_fps}.")
         self.GAME_ZONE = GAME_ZONE
         self.SIZE = SIZE
         self.Vector2 = Vector2
@@ -107,15 +112,17 @@ class TouhouRLEnv:
                 playfield_width=GAME_ZONE[2],
                 playfield_height=GAME_ZONE[3],
                 blue_grid=(8, 8),
-                yellow_size=(320, 320),
+                yellow_size=YELLOW_SIZE,
                 yellow_grid=(16, 16),
-                red_size=(128, 128),
+                red_size=RED_SIZE,
                 red_map=(64, 64),
                 pccm_prediction_frames=self.pccm_prediction_frames,
                 pccm_halo_width=self.pccm_halo_width,
                 pccm_wall_margin=self.pccm_wall_margin,
                 pccm_upper_field_threshold=self.pccm_upper_field_threshold,
                 pccm_upper_field_cost=self.pccm_upper_field_cost,
+                pccm_observation_mode=self.pccm_observation_mode,
+                pccm_implementation=self.pccm_implementation,
             )
         )
 
@@ -243,6 +250,7 @@ class TouhouRLEnv:
                 previous_action_for_reward,
                 collided,
                 blocked_ratio,
+                self.pccm_reward_weight,
             )
             total_reward += frame_reward
             self.last_hp = self.scene.player.hp
@@ -337,7 +345,7 @@ class TouhouRLEnv:
             draw_observation_panels(self.screen, self.last_observation)
         self._draw_reward_panel()
         pygame.display.flip()
-        self.clock.tick(self.render_fps)
+        self.clock.tick(self.FPS)
 
     # Release pygame and database resources.
     def close(self) -> None:
@@ -389,8 +397,13 @@ class TouhouRLEnv:
             f"collided: {self.last_collided}",
             f"blocked ratio: {self.last_blocked_movement_ratio:.3f}",
         ]
-        x = self.GAME_ZONE[0] + self.GAME_ZONE[2] + (330 if self.render_debug else 50)
-        y = 560
+        if self.render_debug:
+            # Keep reward text below the playfield, clear of the PCCM overview.
+            x = self.GAME_ZONE[0]
+            y = self.GAME_ZONE[1] + self.GAME_ZONE[3] + 28
+        else:
+            x = self.GAME_ZONE[0] + self.GAME_ZONE[2] + 50
+            y = 560
         for index, line in enumerate(lines):
             label = font.render(line, True, (255, 255, 255)).convert_alpha()
             self.screen.blit(label, (x, y + index * 26))

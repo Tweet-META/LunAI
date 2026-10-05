@@ -1,0 +1,38 @@
+{
+  "playfield_size": [384, 448],
+  "length": 30.0,
+  "name": "yellow_gap_diagnostic",
+  "description": "Thirty seeded single-row bullet walls with one nearby random gap each.",
+  "source": {
+    "type": "synthetic diagnostic",
+    "note": "Designed to test mid-range observation. This is not a TH06 spell reconstruction."
+  },
+  "enemies": [
+    {
+      "start_position": [192, 0],
+      "trajectory": [
+        [192, 0], [192, 0], [192, 0], [192, 0], [192, 0], [192, 0],
+        [192, 0], [192, 0], [192, 0], [192, 0], [192, 0], [192, 0],
+        [192, 0], [192, 0], [192, 0], [192, 0], [192, 0], [192, 0],
+        [192, 0], [192, 0], [192, 0], [192, 0], [192, 0], [192, 0],
+        [192, 0], [192, 0], [192, 0], [192, 0], [192, 0], [192, 0],
+        [192, 0], [192, 0], [192, 0], [192, 0], [192, 0], [192, 0]
+      ],
+      "speed": 1.0,
+      "sprite": {
+        "size": [24, 19],
+        "path": ["assets", "sprites", "entities", "fairy_0.png"]
+      },
+      "collider": {"radius": 0, "offset": [0, 0]},
+      "hp": 9999,
+      "attacks": [
+        ["yellow_gap_sequence", 30, 60,
+          [["assets", "sprites", "projectiles_and_items", "kunai_0.png"], 16, 16, 4, [0, 0], 0.65],
+          162, 0.0]
+      ],
+      "drop": {"list": ["nothing"], "probabilities": [100]},
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

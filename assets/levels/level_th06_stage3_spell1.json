@@ -1,0 +1,232 @@
+{
+  "playfield_size": [
+    384,
+    448
+  ],
+  "length": 30.0,
+  "name": "th06_stage3_normal_spell1",
+  "description": "Rotating seven-group rings whose orientation sweeps back and forth every 48 volleys.",
+  "source": {
+    "archive": "th06_ST.DAT",
+    "ecl": "ecldata3.ecl",
+    "subroutine": 29,
+    "spell_id": 9,
+    "spell_ordinal": 1,
+    "difficulty": "Normal",
+    "note": "Reconstructed from the original ECL parameters and checked against native headless snapshots. Colors and spawn effects share the simulator's neutral bullet sprite; collision-relevant timing, counts, speed, acceleration, and boss motion are retained."
+  },
+  "enemies": [
+    {
+      "start_position": [
+        192,
+        64
+      ],
+      "trajectory": [
+        [
+          192,
+          66.82
+        ],
+        [
+          192,
+          69.65
+        ],
+        [
+          192,
+          72.47
+        ],
+        [
+          192,
+          75.29
+        ],
+        [
+          192,
+          78.12
+        ],
+        [
+          192,
+          80.94
+        ],
+        [
+          192,
+          83.76
+        ],
+        [
+          192,
+          86.59
+        ],
+        [
+          192,
+          89.41
+        ],
+        [
+          192,
+          92.24
+        ],
+        [
+          192,
+          95.06
+        ],
+        [
+          192,
+          97.88
+        ],
+        [
+          192,
+          100.71
+        ],
+        [
+          192,
+          103.53
+        ],
+        [
+          192,
+          106.35
+        ],
+        [
+          192,
+          109.18
+        ],
+        [
+          192,
+          112.0
+        ],
+        [
+          192,
+          114.82
+        ],
+        [
+          192,
+          117.65
+        ],
+        [
+          192,
+          120.47
+        ],
+        [
+          192,
+          123.29
+        ],
+        [
+          192,
+          126.12
+        ],
+        [
+          192,
+          128.94
+        ],
+        [
+          192,
+          131.76
+        ],
+        [
+          192,
+          134.59
+        ],
+        [
+          192,
+          137.41
+        ],
+        [
+          192,
+          140.24
+        ],
+        [
+          192,
+          143.06
+        ],
+        [
+          192,
+          145.88
+        ],
+        [
+          192,
+          148.71
+        ],
+        [
+          192,
+          151.53
+        ],
+        [
+          192,
+          154.35
+        ],
+        [
+          192,
+          157.18
+        ],
+        [
+          192,
+          160.0
+        ],
+        [
+          192,
+          160.0
+        ],
+        [
+          192,
+          160.0
+        ],
+        [
+          192,
+          160.0
+        ]
+      ],
+      "speed": 1.0,
+      "sprite": {
+        "size": [
+          24,
+          19
+        ],
+        "path": [
+          "assets",
+          "sprites",
+          "entities",
+          "fairy_0.png"
+        ]
+      },
+      "collider": {
+        "radius": 10,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "hp": 99999,
+      "attacks": [
+        [
+          "th06_stage3_spell1",
+          0,
+          0,
+          [
+            [
+              "assets",
+              "sprites",
+              "projectiles_and_items",
+              "bullet_0.png"
+            ],
+            16,
+            16,
+            3,
+            [
+              0,
+              0
+            ],
+            1.0
+          ],
+          2.0,
+          28.0
+        ]
+      ],
+      "drop": {
+        "list": [
+          "nothing"
+        ],
+        "probabilities": [
+          100
+        ]
+      },
+      "clear_on_death": false,
+      "time": 0.0
+    }
+  ]
+}

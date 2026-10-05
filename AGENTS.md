@@ -6,7 +6,9 @@
 
 LunAI（读作“露奈”）是一个用于弹幕游戏避弹研究的强化学习项目。当前主线是多尺度、多帧 CNN + PPO，研究重点是用蓝、黄、红三个尺度模拟人类从全局规划到近距离反应的视觉过程。
 
-环境基于 `NumPix/pygame-touhou` 修改。MLP PPO、DQN 和随机 baseline 已移入 `rl/legacy/`，不要将它们恢复为主线。
+环境基于 `NumPix/pygame-touhou` 修改。2026-10-05 已将 `LunAI-experiments` 的当前代码、配置、关卡、测试和工具复制到本仓库，后续在本仓库继续改进。旧 MLP PPO、DQN 和历史测试保留在 `rl/legacy/`；论文使用的射线 DQN 是 `baselines/tian2023_dqn/` 下的新实现。
+
+当前训练和评估入口使用 Pygame 模拟器，没有 `--environment th06` 选项。main 原有的 `rl/th06_adapter.py`、相关文档和验证脚本仅保留为历史适配代码，尚未与迁移后的观察结构重新整合。
 
 ## 术语
 
@@ -27,19 +29,19 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 ## 当前观察结构
 
-主线观察固定为 PCCM，不再保留可选 motion schema。三个尺度由独立 CNN 分支编码：
+主线使用三个尺度的 density/occupancy、PCCM 和 playable mask，不再保留直接速度通道。支持 `trajectory`、`static` 和 `occupancy_only` 观察消融；支持 `full`、`red_blue` 和 `red_only` 尺度消融。关闭的输入置零，网络参数量保持一致。三个尺度由独立 CNN 分支编码：
 
 | 尺度 | 世界范围 | 输出大小 | 每帧通道 |
 | --- | --- | --- | --- |
-| 蓝区 | 完整 `600x700` 游戏区域 | `8x8` | density、PCCM、playable mask |
-| 黄区 | 玩家中心 `320x320` | `16x16` | density、PCCM、playable mask |
-| 红区 | 玩家中心 `128x128` | `64x64` | occupancy、PCCM、playable mask |
+| 蓝区 | 完整 `384x448` 游戏区域 | `8x8` | density、PCCM、playable mask |
+| 黄区 | 玩家中心 `204x204` | `16x16` | density、PCCM、playable mask |
+| 红区 | 玩家中心 `64x64` | `64x64` | occupancy、PCCM、playable mask |
 
 红区用于精细反应，黄区用于中距离规划，蓝区用于全局态势。红、黄窗口始终以玩家为中心，可以超出游戏区域；场外部分由 playable mask 表示，不应通过移动窗口或吸附网格来隐藏。
 
 每帧每个分支有三个通道。当前 `frame_stack=4`，因此每个分支有十二个输入通道；三种尺度仍分别进入各自 CNN，不要误写为一张普通的 36 通道全屏图。
 
-玩家特征通过单独的 MLP 分支输入。敌人本体具有体术碰撞，因此与敌弹一样作为 hazard 写入观察。
+玩家的八维特征通过单独的 MLP 分支输入。敌人本体具有体术碰撞，因此与敌弹一样作为 hazard 写入观察。几何尺寸集中在 `playfield_config.py`；旧关卡由 `level_scaling.py` 按比例载入，源 JSON 不改写。
 
 直接速度通道已从 PCCM 主线输入中删除。每颗子弹的 `vx/vy` 仍在 observation builder 内部用于未来代价预测。不要在没有新实验依据时恢复 `red_speed`、平均速度或方向通道。
 
@@ -61,7 +63,7 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 
 当前实现位于 `observation_builder.py`，修改时必须保持以下规则：
 
-1. 不生成完整的 `600x700` PCCM。
+1. 不生成完整屏幕的 PCCM。
 2. 蓝、黄、红分别在各自的世界坐标采样网格上计算同一个代价规则。
 3. 子弹位置、速度和碰撞半径使用精确浮点世界坐标，不吸附到网格。
 4. 每颗子弹逐颗计算，不对同一格内的速度求平均。
@@ -71,7 +73,9 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 8. 场外区域不写成 PCCM 的硬危险，只由 playable mask 表示不可到达。
 9. 四面墙分别贡献软代价，因此角落会自然叠加。
 10. 上方 70% 区域从分界线的 0 线性增加到顶部的 0.3，并与墙壁代价软叠加。
-11. 主线只保留 NumPy broadcasting 实现；ROI 和 `auto` 性能实验位于独立的 `experiments` 分支。
+11. 保留 NumPy `reference`，以及 ROI、Numba 和 Torch 后端。Numba 同时加速 PCCM 和 occupancy；PPO 的 `--device` 与地图计算后端独立。
+
+当前 halo 为 `20` 像素。蓝区在 `16x16` 采样后投影为 `8x8`，黄区在 `32x32` 采样后投影为 `16x16`，红区在 `32x32` 采样后插值为 `64x64`。奖励使用隐藏的完整 `_reward_red_pccm`，不随观察消融置零。
 
 未来轨迹在普通慢速子弹上可能不明显。例如 `145 px/s` 的子弹在五帧内只移动约 `12 px`；`600 px/s` 的高速子弹会移动约 `50 px`。这不是预测失效。
 
@@ -80,14 +84,15 @@ PCCM 的准确全称是 **Potential Collision Cost Map**，中文为“潜在碰
 完整奖励定义在 `rl/reward.py`，每个真实游戏帧计算一次：
 
 ```text
-survival reward       = +0.1
-collision penalty     = -30.0（发生碰撞时）
-action change penalty =  0.0
-PCCM state penalty    = -0.1 * local PCCM cost
-blocked movement      = -0.05 * blocked ratio
+collision frame = 0.0
+surviving frame = max(0.0, 0.1 - 0.1 * min(1.0, wall_proximity)
+                      - pccm_reward_weight * local_PCCM)
+pccm_reward_weight 默认 = 0.0；论文 PCC 惩罚组 = 0.1
+action change penalty = 0.0
+blocked movement = 只记录 blocked ratio，不扣分
 ```
 
-PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。Blocked movement 只惩罚动作请求中被边界裁剪掉的位移，不是玩家位置型靠墙惩罚；沿墙移动、离墙移动和原地不动的 blocked ratio 均为 0。奖励数值只在 `rl/reward.py` 修改；`rl/touhou_rl_env.py` 负责测量每帧请求位移和真实位移，并调用完整奖励函数。
+墙壁接近度在距边界不足对应宽高的 12% 时线性增加，横纵贡献相加后在奖励中限制为 1。所有存活帧奖励非负，碰撞帧没有额外负惩罚。`rl/reward.py` 集中定义奖励；`rl/touhou_rl_env.py` 负责测量实际运动、推进环境和统计指标。
 
 默认训练和评估中，第一次有效碰撞结束 episode。
 
@@ -98,6 +103,7 @@ PCCM state penalty 在碰撞帧跳过，避免和碰撞惩罚重复。Blocked mo
 - `config.json` 只保存当前实验有意覆盖的参数；省略项使用脚本默认值，命令行参数用于临时覆盖。
 - 每个 CSV 首行保存最终生效的 `# run_config`。
 - 正式训练关闭 `render` 和 `render_debug`；渲染只用于短暂验收。
+- 直接复制的 `config.json` 是 1M 帧、单局 2160 帧的旧配置。论文正式三面实验使用 `tools/run_formal_9_1_seeds.ps1`：累计 2M 帧、单局 1800 帧；绯红之主转训使用 `tools/finetune_scarlet_meister.py`，追加 300k 帧。不要把根配置误认为论文最终设置。
 
 ## 常用入口
 
@@ -117,7 +123,7 @@ python rl/train_ppo_cnn.py --config config.json
 - 手工代码修改后至少运行相关 `py_compile`、目标测试和 `git diff --check`。
 - 改 observation 时必须验证 shape、有限数值、PCCM 硬碰撞一致性和 PPO smoke training。
 - 改可视化时应实际生成或打开截图，检查尺寸、对齐和文字重叠。
-- 不删除失败实验和历史记录；实验代码集中保存在独立的 `experiments` 分支。
+- 不删除失败实验和历史记录。实验代码现已迁入本仓库；`LunAI-experiments` 原目录保留。
 
 ## 关键文件
 
@@ -128,7 +134,8 @@ python rl/train_ppo_cnn.py --config config.json
 - `rl/touhou_rl_env.py`：环境推进、奖励统计、frame history 和渲染。
 - `rl/reward.py`：完整奖励数值与计算函数。
 - `config.json`：当前主线训练配置。
-- GitHub `experiments` 分支：可独立运行的论文实验环境、消融配置和分析工具。
+- `baselines/tian2023_dqn/`：论文中按同帧预算比较的射线 DQN 基线。
+- `docs/scarlet_meister_finetuning.md`：绯红之主转训与评估流程。
 - `training_logs/plots/reward_and_training_history.md`：按时间记录的实验历史。
 - `tools/visualization_debug.py`：完整游戏区域上的合成 PCCM 调试图。
 

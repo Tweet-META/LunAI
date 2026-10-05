@@ -9,9 +9,26 @@ from torch.distributions import Categorical
 from torch.nn import functional as F
 
 from rl.cnn_observation_utils import CNNObservation
+from playfield_config import PCCM_HALO_WIDTH
 
 
 CURRENT_ARCHITECTURE_VERSION = 2
+OBSERVATION_SCALE_SETS = {
+    "red_only": ("red",),
+    "red_blue": ("red", "blue"),
+    "full": ("red", "yellow", "blue"),
+}
+
+
+# Return the map scales enabled for one observation baseline.
+def observation_scale_names(observation_scales: str) -> tuple[str, ...]:
+    try:
+        return OBSERVATION_SCALE_SETS[observation_scales]
+    except KeyError as error:
+        choices = ", ".join(OBSERVATION_SCALE_SETS)
+        raise ValueError(
+            f"Unsupported observation_scales={observation_scales!r}. Choose from: {choices}."
+        ) from error
 
 
 @dataclass
@@ -21,11 +38,13 @@ class CNNPPOConfig:
     blue_shape: tuple[int, int, int]
     player_dim: int
     architecture_version: int = CURRENT_ARCHITECTURE_VERSION
+    observation_scales: str = "full"
     pccm_prediction_frames: int = 5
-    pccm_halo_width: float = 32.0
+    pccm_halo_width: float = PCCM_HALO_WIDTH
     pccm_wall_margin: float = 0.12
     pccm_upper_field_threshold: float = 0.70
     pccm_upper_field_cost: float = 0.30
+    pccm_observation_mode: str = "trajectory"
     frame_stack: int = 1
     frame_stack_interval: int = 1
     action_repeat: int | None = None
@@ -48,6 +67,7 @@ class CNNActorCritic(nn.Module):
     # Create a multi-branch actor-critic network for map observations.
     def __init__(self, config: CNNPPOConfig):
         super().__init__()
+        self.active_scales = observation_scale_names(config.observation_scales)
         if config.architecture_version == 1:
             scale_feature_dims = {"red": 32 * 8 * 8, "yellow": 16 * 4 * 4, "blue": 16 * 2 * 2}
             self.red_encoder = nn.Sequential(
@@ -121,11 +141,14 @@ class CNNActorCritic(nn.Module):
 
     # Return action logits and state value.
     def forward(self, states: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
-        red_features = self.red_encoder(states["red"])
-        yellow_features = self.yellow_encoder(states["yellow"])
-        blue_features = self.blue_encoder(states["blue"])
+        spatial_features = []
+        for scale in ("red", "yellow", "blue"):
+            scale_state = states[scale]
+            if scale not in self.active_scales:
+                scale_state = torch.zeros_like(scale_state)
+            spatial_features.append(getattr(self, f"{scale}_encoder")(scale_state))
         player_features = self.player_encoder(states["player"])
-        features = torch.cat([red_features, yellow_features, blue_features, player_features], dim=1)
+        features = torch.cat([*spatial_features, player_features], dim=1)
         trunk_features = self.trunk(features)
         logits = self.actor(trunk_features)
         values = self.critic(trunk_features).squeeze(-1)
@@ -323,14 +346,14 @@ def load_cnn_ppo_config(path: str, device: str = "auto") -> CNNPPOConfig:
     checkpoint = torch.load(path, map_location="cpu")
     config_data = dict(checkpoint["config"])
     config_data.setdefault("architecture_version", 1)
-    config_data.pop("observation_scales", None)
+    config_data.setdefault("observation_scales", "full")
     config_data.setdefault("pccm_prediction_frames", 5)
-    config_data.setdefault("pccm_halo_width", 32.0)
+    config_data.setdefault("pccm_halo_width", PCCM_HALO_WIDTH)
     config_data.setdefault("pccm_wall_margin", 0.12)
     config_data.setdefault("pccm_upper_field_threshold", 0.70)
     # Old checkpoints were trained before the upper-field PCCM prior existed.
     config_data.setdefault("pccm_upper_field_cost", 0.0)
-    config_data.pop("pccm_observation_mode", None)
+    config_data.setdefault("pccm_observation_mode", "trajectory")
     config_data.setdefault("frame_stack", 1)
     config_data.setdefault("frame_stack_interval", 1)
     config_data.setdefault("action_repeat", None)
